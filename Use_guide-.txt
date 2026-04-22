@@ -1,0 +1,41 @@
+Quick Sanity Video Use guide-
+
+Tip: Click the “three lines”(context menu) button; to hide this menu.
+
+1.Load or Save a current project(always remember to save incrementally) will be downloaded to the downloads folder as a “Layercut” save. You may rename the file and it will still work.
+
+2.When finished with your project video you may Export as WebM; which records the previewer live; so don’t mess with things until it’s completed its playback. “*Developers note* use a third party converter to get different file types.”
+
+3.Set canvas size: 1280x720, 1920x1080, or 1024x576(more to come later).
+
+4.Add, edit, name, select, toggle visibility, duplicate, or upload: image, audio or video clips to, Layers: from the layers 
+
+5.Add, Edit, name, select(and multi-select), copy and paste, clips, to layer/s; by type: audio, video, text, transition, or scrub box to the selected clip/s
+
+6.Add, Edit, multiple clip effects per clip type.
+
+7.Click drag clips, shift click multiple clips and on the last selected clip click: start drag. If you drag after you selected all and released it will unselect the one you are trying to drag.
+
+8.Grab playhead ruler to scrub timeline.
+
+9.Hover the mouse over a specific spot, where you want to zoom into and use the scroll wheel to zoom in on that spot
+
+10.Use middle mouse click to “grab” the canvas of the timeline and move yourself to where you want to look.
+
+11.HOTKEYS:
+
+Keyboard hotkeys:
+Ctrl + Z → Undo
+Ctrl + Y → Redo
+Ctrl + Shift + Z → Redo
+Ctrl + B → Split selected clip(s) at the playhead
+Space → Play / Pause
+Escape → Stop playback and close the clip context menu
+Escape → Close the clip context menu
+
+Modifier-assisted interactions
+Shift + click on a clip → Multi-select / add clip to selection
+Shift + drag-select behavior is preserved during clip/body/trim-handle selection logic.
+Shift + right-click on empty timeline area → Opens the clip context menu without clearing the current selection
+Right-click on empty timeline area without Shift → Clears selection, then opens the clip context menu
+
