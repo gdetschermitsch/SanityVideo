@@ -22,6 +22,8 @@
     audioContext: null,
     audioDestination: null,
     mediaSourceMap: new WeakMap(),
+    mediaPlayRequestMap: new WeakMap(),
+    forceMediaSync: false,
     exporting: false,
     exportStopRequested: false,
     exportPlaybackEnd: null,
@@ -616,7 +618,10 @@
 
   function setCurrentTime(value) {
     state.currentTime = clamp(Number(value) || 0, 0, state.duration);
-    syncAudioVideo();
+    const previousForceSync = state.forceMediaSync;
+    state.forceMediaSync = true;
+    try { syncAudioVideo(); }
+    finally { state.forceMediaSync = previousForceSync; }
     drawPreview();
     renderPlayhead();
     queuePausedPreviewRefresh();
@@ -702,6 +707,7 @@
     txt: 'text/plain'
   });
   const GENERIC_IMPORT_MIME_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream', 'application/unknown', 'application/x-download']);
+  const IOS_LIKE_DEVICE = /iP(?:hone|ad|od)/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints) > 1);
 
   function fileExtension(fileName = '') {
     const safeName = String(fileName || '').toLowerCase().split(/[?#]/, 1)[0];
@@ -739,16 +745,67 @@
   function normalizeImportFile(file, kind) {
     const mimeType = inferredImportMime(file, kind);
     const currentType = String(file?.type || '').toLowerCase().split(';', 1)[0].trim();
-    if (currentType === mimeType && !GENERIC_IMPORT_MIME_TYPES.has(currentType)) return { blob: file, mimeType };
+    if (currentType === mimeType && !GENERIC_IMPORT_MIME_TYPES.has(currentType)) return { blob: file, mimeType, materialized: false };
     try {
-      // Blob.slice() retags the MIME type without rebuilding the File. This is
-      // substantially more reliable for iPhone Files/iCloud provider handles,
-      // which can stop reading when wrapped inside a new File object.
+      // Retag without changing the original file-provider handle. This is the
+      // cheapest path and remains the desktop/Android default.
       if (typeof file?.slice === 'function') {
-        return { blob: file.slice(0, Number(file.size) || undefined, mimeType), mimeType };
+        return { blob: file.slice(0, Number(file.size) || undefined, mimeType), mimeType, materialized: false };
       }
     } catch (err) {}
-    return { blob: new Blob([file], { type: mimeType }), mimeType };
+    return { blob: new Blob([file], { type: mimeType }), mimeType, materialized: true };
+  }
+
+  function canMaterializeImportFile(file) {
+    return !!file && (typeof file.arrayBuffer === 'function' || typeof FileReader !== 'undefined');
+  }
+
+  function readImportFileBytes(file) {
+    if (typeof file?.arrayBuffer === 'function') return file.arrayBuffer();
+    return new Promise((resolve, reject) => {
+      if (typeof FileReader === 'undefined') {
+        reject(new Error('This browser cannot read the selected file bytes.'));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('The selected file could not be read.'));
+      reader.onabort = () => reject(new Error('The selected file read was cancelled.'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function prepareImportBlob(file, kind, forceMaterialize = false) {
+    const normalized = normalizeImportFile(file, kind);
+    const shouldMaterialize = forceMaterialize || (IOS_LIKE_DEVICE && kind === 'audio');
+    if (!shouldMaterialize || !canMaterializeImportFile(file)) return normalized;
+    try {
+      // Reading the bytes before creating the object URL forces iCloud Drive and
+      // other iPhone document providers to finish delivering the selected file.
+      // Without this, Safari can return from Open with a lazy file handle that
+      // never produces media metadata.
+      const bytes = await readImportFileBytes(file);
+      if (!bytes || (!bytes.byteLength && Number(file.size) > 0)) throw new Error('The selected file returned no readable data.');
+      return { blob: new Blob([bytes], { type: normalized.mimeType }), mimeType: normalized.mimeType, materialized: true };
+    } catch (err) {
+      if (forceMaterialize) throw err;
+      console.warn('Could not pre-read the iPhone file; trying the provider handle directly.', err);
+      return normalized;
+    }
+  }
+
+  function getMediaElementHost() {
+    let host = document.getElementById('sanityMediaElementHost');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'sanityMediaElementHost';
+    host.setAttribute('aria-hidden', 'true');
+    Object.assign(host.style, {
+      position: 'fixed', left: '-10000px', top: '0', width: '2px', height: '2px',
+      overflow: 'hidden', opacity: '0.001', pointerEvents: 'none', zIndex: '-1'
+    });
+    document.body.appendChild(host);
+    return host;
   }
 
 
@@ -1428,14 +1485,24 @@
   }
 
   async function generateWaveformForClip(clip) {
-    if (!clip || clip.kind !== 'audio' || clip.waveformDataUrl || !clip.src || state.waveformJobs.get(clip)) return;
+    if (!clip || clip.kind !== 'audio' || clip.waveformDataUrl || clip.waveformNativePreview || !clip.src || state.waveformJobs.get(clip)) return;
+
+    // Creating a Web Audio context solely for waveform decoding can switch the
+    // iPhone audio session into a lower-quality route. Keep imported audio on
+    // Safari's native decoder and leave the timeline strip as its waveform cue.
+    if (IOS_LIKE_DEVICE) {
+      clip.waveformNativePreview = true;
+      return;
+    }
+
     const job = (async () => {
+      let temporaryContext = null;
       try {
         const response = await fetch(clip.src);
         const arrayBuffer = await response.arrayBuffer();
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
-        const ac = state.audioContext || new AudioCtx();
+        const ac = state.audioContext || (temporaryContext = new AudioCtx());
         const buffer = await ac.decodeAudioData(arrayBuffer.slice(0));
         const channel = buffer.getChannelData(0);
         const bars = 96;
@@ -1443,27 +1510,34 @@
         const peaks = [];
         for (let i = 0; i < bars; i++) {
           let peak = 0;
-          const start = i * step;
-          const end = Math.min(channel.length, start + step);
-          for (let s = start; s < end; s++) peak = Math.max(peak, Math.abs(channel[s] || 0));
+          const sampleStart = i * step;
+          const sampleEnd = Math.min(channel.length, sampleStart + step);
+          for (let sample = sampleStart; sample < sampleEnd; sample++) peak = Math.max(peak, Math.abs(channel[sample] || 0));
           peaks.push(peak);
         }
         const canv = document.createElement('canvas');
-        canv.width = 384; canv.height = 48;
+        canv.width = 384;
+        canv.height = 48;
         const c2 = canv.getContext('2d');
-        c2.clearRect(0,0,canv.width,canv.height);
+        c2.clearRect(0, 0, canv.width, canv.height);
         c2.fillStyle = 'rgba(255,255,255,0.88)';
         const mid = canv.height / 2;
         const barW = canv.width / peaks.length;
         peaks.forEach((peak, i) => {
           const h = Math.max(2, peak * (canv.height * 0.9));
           const x = i * barW + 0.5;
-          c2.fillRect(x, mid - h/2, Math.max(1, barW - 1), h);
+          c2.fillRect(x, mid - h / 2, Math.max(1, barW - 1), h);
         });
         clip.waveformDataUrl = canv.toDataURL('image/png');
         renderTracks();
-      } catch (err) { console.warn('Waveform generation skipped', err); }
-      finally { state.waveformJobs.delete(clip); }
+      } catch (err) {
+        console.warn('Waveform generation skipped', err);
+      } finally {
+        state.waveformJobs.delete(clip);
+        if (temporaryContext && temporaryContext.state !== 'closed') {
+          try { await temporaryContext.close(); } catch (err) {}
+        }
+      }
     })();
     state.waveformJobs.set(clip, job);
     return job;
@@ -1897,7 +1971,7 @@
             <div class="handle right"></div>
           </div>
         `;
-        if (clip.kind === 'audio' && !clip.waveformDataUrl) generateWaveformForClip(clip);
+        if (clip.kind === 'audio' && !clip.waveformDataUrl && !clip.waveformNativePreview) generateWaveformForClip(clip);
         attachClipInteractions(clipEl, layer, clip, index);
         els.tracksArea.appendChild(clipEl);
         state.clipEls.set(clip.id, clipEl);
@@ -2308,26 +2382,85 @@
   }
 
   async function ensureAudioGraphFor(media) {
-    if (!(media instanceof HTMLMediaElement)) return;
-    if (!state.audioContext) {
-      state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      state.audioDestination = state.audioContext.createMediaStreamDestination();
+    if (!(media instanceof HTMLMediaElement)) return false;
+    if (state.mediaSourceMap.has(media)) return true;
+    if (media.dataset.sanityAudioGraphUnavailable === '1') return false;
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) {
+      media.dataset.sanityAudioGraphUnavailable = '1';
+      return false;
     }
-    if (state.audioContext.state === 'suspended') {
-      try { await state.audioContext.resume(); } catch (err) {}
+    try {
+      if (!state.audioContext || state.audioContext.state === 'closed') {
+        state.audioContext = new AudioContextCtor();
+        try {
+          state.audioDestination = typeof state.audioContext.createMediaStreamDestination === 'function'
+            ? state.audioContext.createMediaStreamDestination()
+            : null;
+        } catch (err) {
+          state.audioDestination = null;
+        }
+      }
+      if (state.audioContext.state === 'suspended') {
+        try { await state.audioContext.resume(); } catch (err) {}
+      }
+      const source = state.audioContext.createMediaElementSource(media);
+      try { source.connect(state.audioContext.destination); } catch (err) {}
+      if (state.audioDestination) {
+        try { source.connect(state.audioDestination); } catch (err) {}
+      }
+      state.mediaSourceMap.set(media, source);
+      return true;
+    } catch (err) {
+      // Direct HTMLMediaElement playback remains the reliable high-quality path
+      // when WebKit refuses or degrades a blob-backed Web Audio source.
+      media.dataset.sanityAudioGraphUnavailable = '1';
+      console.warn('Web Audio routing is unavailable for this clip; using direct media playback.', err);
+      return false;
     }
-    if (state.mediaSourceMap.has(media)) return;
-    const source = state.audioContext.createMediaElementSource(media);
-    source.connect(state.audioContext.destination);
-    source.connect(state.audioDestination);
-    state.mediaSourceMap.set(media, source);
   }
 
-  async function prepareAudioGraph() {
+  async function prepareAudioGraph(options = {}) {
+    const force = !!options.force;
     for (const layer of state.layers) {
       for (const clip of layer.clips) {
-        if (clip.element instanceof HTMLMediaElement) await ensureAudioGraphFor(clip.element);
+        const media = clip.element;
+        if (!(media instanceof HTMLMediaElement)) continue;
+        // iPhone preview playback stays on Safari's native media decoder. Web
+        // Audio is only engaged when export explicitly needs a capture stream.
+        if (IOS_LIKE_DEVICE && !force) continue;
+        if (IOS_LIKE_DEVICE && force) media.dataset.sanityIosForcedGraph = '1';
+        await ensureAudioGraphFor(media);
       }
+    }
+  }
+
+  function requestMediaPlay(media) {
+    if (!(media instanceof HTMLMediaElement) || !media.paused) return;
+    if (state.mediaPlayRequestMap.has(media)) return;
+    const request = { cancelled: false };
+    state.mediaPlayRequestMap.set(media, request);
+    let playResult;
+    try { playResult = media.play(); }
+    catch (err) {
+      state.mediaPlayRequestMap.delete(media);
+      return;
+    }
+    Promise.resolve(playResult).catch(() => {}).finally(() => {
+      if (state.mediaPlayRequestMap.get(media) === request) state.mediaPlayRequestMap.delete(media);
+      if (request.cancelled) {
+        try { media.pause(); } catch (err) {}
+      }
+    });
+  }
+
+  function pauseMedia(media) {
+    if (!(media instanceof HTMLMediaElement)) return;
+    const request = state.mediaPlayRequestMap.get(media);
+    if (request) request.cancelled = true;
+    state.mediaPlayRequestMap.delete(media);
+    if (!media.paused) {
+      try { media.pause(); } catch (err) {}
     }
   }
 
@@ -2339,25 +2472,51 @@
         const playbackRate = getClipPlaybackRate(clip);
         const inRange = state.currentTime >= clip.start && state.currentTime <= clip.start + clip.duration;
         const shouldPlay = inRange && state.playing;
-        media.volume = (clip.volume ?? 1) * getClipFadeAlpha(clip, state.currentTime);
-        try { media.playbackRate = playbackRate; } catch (err) {}
+        const targetVolume = clamp((clip.volume ?? 1) * getClipFadeAlpha(clip, state.currentTime), 0, 1);
+        if (Math.abs((Number(media.volume) || 0) - targetVolume) > 0.001) {
+          try { media.volume = targetVolume; } catch (err) {}
+        }
+        if (Math.abs((Number(media.playbackRate) || 1) - playbackRate) > 0.001) {
+          try { media.playbackRate = playbackRate; } catch (err) {}
+        }
         if (inRange) {
           const desired = clamp((Number(clip.trimStart) || 0) + (state.currentTime - clip.start) * playbackRate, 0, Math.max(0, (clip.mediaDuration ?? clip.duration) - 0.03));
-          const tolerance = state.playing ? 0.25 : (1 / 30);
+          const nativeIosPreview = IOS_LIKE_DEVICE && media.dataset.sanityNativePreview === '1' && !state.exporting;
+          const tolerance = state.forceMediaSync ? (1 / 120) : state.playing ? (nativeIosPreview ? 0.75 : 0.25) : (1 / 30);
           if (Math.abs((media.currentTime || 0) - desired) > tolerance) {
             try { media.currentTime = desired; } catch (err) {}
           }
-          if (shouldPlay) {
-            if (media.paused) media.play().catch(() => {});
-          } else if (!media.paused) {
-            media.pause();
-          }
-        } else if (!media.paused) {
-          media.pause();
+          if (shouldPlay) requestMediaPlay(media);
+          else pauseMedia(media);
+        } else {
+          pauseMedia(media);
         }
       }
     }
   }
+
+  async function restoreIosNativePreviewElements() {
+    if (!IOS_LIKE_DEVICE) return;
+    for (const layer of state.layers) {
+      for (const clip of layer.clips) {
+        const oldMedia = clip.element;
+        if (!(oldMedia instanceof HTMLMediaElement) || oldMedia.dataset.sanityIosForcedGraph !== '1' || !clip.src) continue;
+        try {
+          const replacement = await createMediaElement(clip.kind, clip.src, clip.mimeType || '');
+          const desired = clamp((Number(clip.trimStart) || 0) + Math.max(0, state.currentTime - clip.start) * getClipPlaybackRate(clip), 0, Math.max(0, (clip.mediaDuration ?? clip.duration) - 0.03));
+          try { replacement.currentTime = desired; } catch (err) {}
+          clip.element = replacement;
+          pauseMedia(oldMedia);
+          try { oldMedia.removeAttribute('src'); oldMedia.load(); } catch (err) {}
+          try { oldMedia.remove(); } catch (err) {}
+          state.mediaSourceMap.delete(oldMedia);
+        } catch (err) {
+          console.warn('Could not restore the native iPhone preview element after export.', err);
+        }
+      }
+    }
+  }
+
 
   function drawMediaFit(source, width, height, clip = null, targetCtx = ctx) {
     const sw = source.videoWidth || source.naturalWidth || source.width;
@@ -2735,13 +2894,17 @@
   function createMediaElement(kind, url, mimeType = '') {
     return new Promise((resolve, reject) => {
       let settled = false;
+      let timeoutId = null;
+      let pollId = null;
       const finish = (fn, value) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
+        if (pollId) clearInterval(pollId);
         fn(value);
       };
-      const timeoutId = setTimeout(() => finish(reject, new Error('Timed out while reading media metadata.')), 20000);
+      const timeoutMs = IOS_LIKE_DEVICE ? 60000 : 30000;
+      timeoutId = setTimeout(() => finish(reject, new Error('Timed out while reading media metadata.')), timeoutMs);
       if (kind === 'image') {
         const img = new Image();
         img.onload = () => finish(resolve, img);
@@ -2749,10 +2912,22 @@
         img.src = url;
       } else if (kind === 'video' || kind === 'audio') {
         const media = document.createElement(kind);
-        media.preload = 'metadata';
+        media.preload = IOS_LIKE_DEVICE && kind === 'audio' ? 'auto' : 'metadata';
         media.playsInline = true;
+        media.setAttribute('playsinline', '');
+        media.setAttribute('webkit-playsinline', '');
+        media.controls = false;
+        media.autoplay = false;
+        media.tabIndex = -1;
+        media.defaultPlaybackRate = 1;
+        media.playbackRate = 1;
+        try { media.preservesPitch = true; } catch (err) {}
+        try { media.webkitPreservesPitch = true; } catch (err) {}
+        try { media.disableRemotePlayback = true; } catch (err) {}
+        if (IOS_LIKE_DEVICE) media.dataset.sanityNativePreview = '1';
         if (kind === 'video') {
-          media.crossOrigin = 'anonymous';
+          // crossOrigin on blob: URLs can prevent Safari from loading local media.
+          if (/^https?:/i.test(url)) media.crossOrigin = 'anonymous';
           media.muted = false;
           media.defaultMuted = false;
           const refreshPausedPreview = () => {
@@ -2761,19 +2936,26 @@
           media.addEventListener('loadeddata', refreshPausedPreview);
           media.addEventListener('seeked', refreshPausedPreview);
         }
-        media.addEventListener('loadedmetadata', () => finish(resolve, media), { once: true });
-        media.addEventListener('durationchange', () => {
-          if (media.readyState >= 1) finish(resolve, media);
-        }, { once: true });
+        const ready = () => {
+          if (media.readyState >= 1 || (Number.isFinite(Number(media.duration)) && Number(media.duration) > 0)) {
+            finish(resolve, media);
+          }
+        };
+        ['loadedmetadata', 'loadeddata', 'canplay', 'durationchange'].forEach(eventName => {
+          media.addEventListener(eventName, ready, { once: eventName !== 'durationchange' });
+        });
         media.addEventListener('error', () => {
           const detail = media.error?.message || `This ${kind} format could not be decoded by the browser.`;
           finish(reject, new Error(detail));
         }, { once: true });
         if (mimeType) media.dataset.importMime = mimeType;
+        // Keeping the probe attached off-screen is important on iPhone Safari;
+        // detached audio elements can remain at HAVE_NOTHING after Files closes.
+        getMediaElementHost().appendChild(media);
         media.src = url;
-        // Explicit load() is important on iOS and Android document providers,
-        // where assigning a blob URL alone does not always begin metadata load.
         try { media.load(); } catch (err) {}
+        pollId = setInterval(ready, 250);
+        ready();
       } else {
         finish(reject, new Error('Unsupported media kind.'));
       }
@@ -2804,9 +2986,25 @@
         if (kind === 'text') {
           clip = await createTextClipFromFile(file, layer, start);
         } else {
-          const normalized = normalizeImportFile(file, kind);
+          let normalized = await prepareImportBlob(file, kind);
           objectUrl = URL.createObjectURL(normalized.blob);
-          let media = await createMediaElement(kind, objectUrl, normalized.mimeType);
+          let media;
+          try {
+            media = await createMediaElement(kind, objectUrl, normalized.mimeType);
+          } catch (firstError) {
+            // One retry with a fully materialized byte copy covers lazy iCloud
+            // handles and provider MIME bugs without duplicating large files on
+            // platforms that already work.
+            if (!normalized.materialized && canMaterializeImportFile(file)) {
+              URL.revokeObjectURL(objectUrl);
+              objectUrl = '';
+              normalized = await prepareImportBlob(file, kind, true);
+              objectUrl = URL.createObjectURL(normalized.blob);
+              media = await createMediaElement(kind, objectUrl, normalized.mimeType);
+            } else {
+              throw firstError;
+            }
+          }
 
           // Audio-only WebM files can arrive from mobile storage as video/webm.
           // Rebuild them as a true audio element when no video dimensions exist.
@@ -2818,7 +3016,10 @@
             media = await createMediaElement('audio', objectUrl, 'audio/webm');
           }
 
-          if (media instanceof HTMLMediaElement) await ensureAudioGraphFor(media);
+          // Do not wrap a newly imported iPhone media element in Web Audio
+          // until the user presses Play/Export. Creating the graph while the
+          // Files picker is closing can fail or leave audio silent on iOS.
+          if (media instanceof HTMLMediaElement && !IOS_LIKE_DEVICE) await ensureAudioGraphFor(media);
           const mediaDuration = (kind === 'video' || kind === 'audio') ? getUsableMediaDuration(media, 5) : DEFAULT_IMAGE_DURATION;
           clip = buildBaseClip(kind, file.name, start, kind === 'image' ? DEFAULT_IMAGE_DURATION : Math.max(0.3, mediaDuration), mediaDuration);
           clip.element = media;
@@ -2859,7 +3060,7 @@
     let media = null;
     if (clip.kind !== 'text' && clip.kind !== 'transition') {
       media = await createMediaElement(clip.kind, clip.src);
-      if (media instanceof HTMLMediaElement) await ensureAudioGraphFor(media);
+      if (media instanceof HTMLMediaElement && !IOS_LIKE_DEVICE) await ensureAudioGraphFor(media);
     }
     const startOffset = Number.isFinite(Number(options.startOffset)) ? Number(options.startOffset) : 0.2;
     const labelSuffix = Object.prototype.hasOwnProperty.call(options, 'labelSuffix') ? String(options.labelSuffix) : ' Copy';
@@ -2876,6 +3077,7 @@
       fontFamily: clip.fontFamily || 'Arial',
       textAnimation: clip.textAnimation || 'none',
       waveformDataUrl: clip.waveformDataUrl || '',
+      waveformNativePreview: !!clip.waveformNativePreview,
       transitionType: clip.transitionType || 'crossfade',
       fromClipId: clip.fromClipId || '',
       toClipId: clip.toClipId || '',
@@ -3183,7 +3385,7 @@
           ? ''
           : ((clipData.sourceFile instanceof Blob) ? URL.createObjectURL(clipData.sourceFile) : (clipData.src || ''));
         const media = (clipData.kind === 'text' || clipData.kind === 'transition') ? null : await createMediaElement(clipData.kind, clipUrl);
-        if (media instanceof HTMLMediaElement) await ensureAudioGraphFor(media);
+        if (media instanceof HTMLMediaElement && !IOS_LIKE_DEVICE) await ensureAudioGraphFor(media);
         layer.clips.push({
           id: clipData.id || uid('clip'),
           kind: clipData.kind,
@@ -3965,8 +4167,11 @@
     const range = getExportRange();
     const exportDuration = range.end - range.start;
     if (!(exportDuration > 0)) throw new Error('The WAV export range is empty.');
-    await prepareAudioGraph();
-    if (!state.audioContext || !state.audioDestination) throw new Error('Timeline audio capture is unavailable.');
+    await prepareAudioGraph({ force: true });
+    if (!state.audioContext || !state.audioDestination) {
+      await restoreIosNativePreviewElements();
+      throw new Error('Timeline audio capture is unavailable.');
+    }
     const sourceRate = state.audioContext.sampleRate;
     const requestedChannels = Number(els.exportWavChannels?.value) === 1 ? 1 : 2;
     const targetRate = [44100, 48000, 96000].includes(Number(els.exportWavSampleRate?.value)) ? Number(els.exportWavSampleRate.value) : 48000;
@@ -4059,8 +4264,9 @@
       state.playing = false;
       state.exportPlaybackEnd = null;
       state.currentTime = previousTime;
-      state.playing = previousPlaying;
       state.exporting = false;
+      await restoreIosNativePreviewElements();
+      state.playing = previousPlaying;
       state.exportStopRequested = false;
       syncAudioVideo();
       drawPreview();
@@ -4117,7 +4323,12 @@
     const exportDuration = range.end - range.start;
     if (!(exportDuration > 0)) throw new Error('The export range is empty.');
 
-    await prepareAudioGraph();
+    try {
+      await prepareAudioGraph({ force: true });
+    } catch (err) {
+      await restoreIosNativePreviewElements();
+      throw err;
+    }
     const previousTime = state.currentTime;
     const previousPlaying = state.playing;
     const previousOverlay = state.showPreviewTimeOverlay;
@@ -4210,8 +4421,9 @@
       state.exportRenderScale = 1;
       state.showPreviewTimeOverlay = previousOverlay;
       state.currentTime = previousTime;
-      state.playing = previousPlaying;
       state.exporting = false;
+      await restoreIosNativePreviewElements();
+      state.playing = previousPlaying;
       state.exportStopRequested = false;
       for (const track of exportStream?.getTracks?.() || []) {
         if (!state.audioDestination?.stream?.getTracks?.().includes(track)) {
@@ -4282,9 +4494,8 @@
 
     try {
       setStatus(`Importing ${files.length} file${files.length === 1 ? '' : 's'}…`);
-      // Give iOS a paint opportunity after the native picker closes so the UI
-      // visibly confirms that the Open action was received.
-      await new Promise(resolve => requestAnimationFrame(() => resolve()));
+      // Begin reading immediately after Files returns. Delaying even one frame
+      // can leave some iCloud/provider files as unresolved lazy handles.
       const result = await addMediaFiles(files, targetLayerId);
       if (result.added) pushHistory('Add media');
       const issues = result.skipped.length + result.failed.length;
@@ -4309,7 +4520,13 @@
 
   function bindMediaInput(input) {
     if (!input) return;
-    input.addEventListener('change', () => handleMediaInputSelection(input));
+    const receiveSelection = () => {
+      // Safari normally emits change, but some iOS document providers emit input
+      // first. The busy flag makes listening to both safe and idempotent.
+      handleMediaInputSelection(input);
+    };
+    input.addEventListener('input', receiveSelection);
+    input.addEventListener('change', receiveSelection);
     input.addEventListener('cancel', () => {
       input._pendingImportLayerId = null;
       state.pendingImportLayerId = null;
@@ -4365,13 +4582,12 @@
       const targetLayerId = getActiveImportLayerId();
       state.pendingImportLayerId = targetLayerId;
       els.mobileMediaInput._pendingImportLayerId = targetLayerId;
-      // Reset before opening so choosing the same file still fires change.
-      if (els.mobileMediaInput.dataset.importBusy !== '1') els.mobileMediaInput.value = '';
       setStatus('Choose media to import into the selected layer…');
     };
-    // pointerdown is used when available; touchstart keeps older iPhones safe.
-    els.mobileMediaInput.addEventListener('pointerdown', prepareNativeMobileImport, { passive: true });
-    els.mobileMediaInput.addEventListener('touchstart', prepareNativeMobileImport, { passive: true });
+    // Use one pre-picker event only. Registering both pointerdown and touchstart
+    // can clear or re-arm the native control twice on iPhone Safari.
+    if (window.PointerEvent) els.mobileMediaInput.addEventListener('pointerdown', prepareNativeMobileImport, { passive: true });
+    else els.mobileMediaInput.addEventListener('touchstart', prepareNativeMobileImport, { passive: true });
     els.mobileMediaInput.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') prepareNativeMobileImport();
     });
@@ -4402,7 +4618,12 @@
 
   async function startPlayback() {
     await prepareAudioGraph();
+    state.lastFrameTime = performance.now();
     state.playing = true;
+    const previousForceSync = state.forceMediaSync;
+    state.forceMediaSync = true;
+    try { syncAudioVideo(); }
+    finally { state.forceMediaSync = previousForceSync; }
   }
 
   function pausePlayback() {

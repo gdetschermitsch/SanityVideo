@@ -1286,10 +1286,9 @@
       -webkit-user-select:none;
       user-select:none;
     }
-    /* iPhone Safari can ignore a programmatic click on a file input whose
-       desktop toolbar ancestor is hidden. This transparent native input sits
-       directly over the visible Import control, so the tap reaches the real
-       file input and the Files app's Open action always has a live target. */
+    /* Keep the real native input as the direct touch target. iPhone Safari can
+       drop the Files app's Open result when a hidden input is activated through
+       another element. The input is therefore physically over the button. */
     .mobile-import-native-input {
       position:absolute;
       inset:0;
@@ -1416,10 +1415,10 @@
       <span id="mobileHeaderTime" class="mobile-header-time">00:00.0 / 00:30.0</span>
     </div>
     <div class="mobile-header-actions" role="toolbar" aria-label="Quick editor actions">
-      <label id="mobileImportBtn" class="button-like primary mobile-import-control" aria-label="Import media to selected layer">
+      <div id="mobileImportBtn" class="button-like primary mobile-import-control" role="button" aria-label="Import media to selected layer">
         <span aria-hidden="true">＋</span><span>Import</span>
-        <input id="mobileMediaInput" class="mobile-import-native-input" type="file" accept="audio/*,video/*,image/*,text/plain,.mp3,.mp2,.mpga,.m4a,.aac,.adts,.wav,.wave,.ogg,.oga,.opus,.weba,.flac,.aif,.aiff,.aifc,.caf,.amr,.3ga,.mp4,.mov,.m4v,.webm,.ogv,.mpeg,.mpg,.3gp,.3g2,.avi,.mkv,.mts,.m2ts,.gif,.png,.jpg,.jpeg,.jfif,.webp,.bmp,.svg,.avif,.heic,.heif,.txt" multiple />
-      </label>
+        <input id="mobileMediaInput" class="mobile-import-native-input" type="file" aria-label="Choose one media file to import" accept="audio/*,video/*,image/*,text/plain,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.aif,.aiff,.caf,.mp4,.mov,.m4v,.webm,.gif,.png,.jpg,.jpeg,.webp,.txt" />
+      </div>
       <button id="mobilePlayPauseBtn" class="primary" type="button" aria-pressed="false"><span aria-hidden="true">▶</span><span>Play</span></button>
       <button id="mobileStopBtn" type="button"><span aria-hidden="true">■</span><span>Stop</span></button>
       <button id="mobileUndoBtn" type="button"><span aria-hidden="true">↶</span><span>Undo</span></button>
