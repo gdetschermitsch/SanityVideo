@@ -180,6 +180,9 @@
     closeUiSettingsBtn: document.getElementById('closeUiSettingsBtn'),
     doneUiSettingsBtn: document.getElementById('doneUiSettingsBtn'),
     resetUiScalingBtn: document.getElementById('resetUiScalingBtn'),
+    installAppBtn: document.getElementById('installAppBtn'),
+    installAppStatus: document.getElementById('installAppStatus'),
+    iosInstallSteps: document.getElementById('iosInstallSteps'),
     uiScaleInputs: [...document.querySelectorAll('[data-ui-scale]')],
     exportOverlay: document.getElementById('exportOverlay'),
     closeExportBtn: document.getElementById('closeExportBtn'),
@@ -481,6 +484,131 @@
     applyUiScalePreferences({ persist: true });
     setStatus('All workspace windows reset to 100% scale.');
   }
+
+
+  let deferredInstallPrompt = null;
+
+  function isIosDevice() {
+    return /iphone|ipad|ipod/i.test(navigator.userAgent || '') ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function isStandaloneApp() {
+    return window.matchMedia?.('(display-mode: standalone)').matches ||
+      window.matchMedia?.('(display-mode: fullscreen)').matches ||
+      window.navigator.standalone === true;
+  }
+
+  function canUseInstallInfrastructure() {
+    return window.isSecureContext && /^https?:$/.test(window.location.protocol);
+  }
+
+  function setInstallStatus(message) {
+    if (els.installAppStatus) els.installAppStatus.textContent = message;
+  }
+
+  function updateInstallAppUi() {
+    if (!els.installAppBtn) return;
+
+    const standalone = isStandaloneApp();
+    const ios = isIosDevice();
+    const secure = canUseInstallInfrastructure();
+
+    if (standalone) {
+      els.installAppBtn.textContent = 'SanityVideo Is Installed';
+      els.installAppBtn.disabled = true;
+      if (els.iosInstallSteps) els.iosInstallSteps.hidden = true;
+      setInstallStatus('SanityVideo is running as an installed standalone app on this device.');
+      return;
+    }
+
+    els.installAppBtn.disabled = false;
+    if (!ios && els.iosInstallSteps) els.iosInstallSteps.hidden = true;
+    if (!ios) els.installAppBtn.setAttribute('aria-expanded', 'false');
+
+    if (!secure) {
+      els.installAppBtn.textContent = 'HTTPS Required to Install';
+      els.installAppBtn.disabled = true;
+      setInstallStatus('App installation becomes available after SanityVideo is hosted over HTTPS. A local file:// copy cannot install as a browser app.');
+      return;
+    }
+
+    if (ios) {
+      els.installAppBtn.textContent = 'Show iPhone / iPad Install Steps';
+      setInstallStatus('Apple devices install web apps through Safari’s Add to Home Screen command.');
+      return;
+    }
+
+    if (deferredInstallPrompt) {
+      els.installAppBtn.textContent = 'Install SanityVideo App';
+      setInstallStatus('SanityVideo is ready to install as a standalone app.');
+      return;
+    }
+
+    els.installAppBtn.textContent = 'Install SanityVideo App';
+    setInstallStatus('The browser is checking install eligibility. If no prompt appears, use the browser menu and choose Install SanityVideo or Install app.');
+  }
+
+  async function requestSanityVideoInstall() {
+    if (isStandaloneApp()) {
+      updateInstallAppUi();
+      return;
+    }
+
+    if (isIosDevice()) {
+      if (els.iosInstallSteps) {
+        els.iosInstallSteps.hidden = !els.iosInstallSteps.hidden;
+        els.installAppBtn?.setAttribute('aria-expanded', String(!els.iosInstallSteps.hidden));
+        if (!els.iosInstallSteps.hidden) els.iosInstallSteps.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      setInstallStatus('Use Safari’s Share menu and select Add to Home Screen.');
+      return;
+    }
+
+    if (!deferredInstallPrompt) {
+      setInstallStatus('The native install prompt is not available yet. Use the browser menu and choose Install SanityVideo or Install app.');
+      return;
+    }
+
+    const promptEvent = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    await promptEvent.prompt();
+    const choice = await promptEvent.userChoice;
+    if (choice?.outcome === 'accepted') {
+      setInstallStatus('Installation accepted. SanityVideo will appear with your installed apps.');
+    } else {
+      setInstallStatus('Installation was dismissed. You can install later from this Settings section.');
+    }
+    updateInstallAppUi();
+  }
+
+  async function registerSanityVideoServiceWorker() {
+    if (!('serviceWorker' in navigator) || !canUseInstallInfrastructure()) {
+      updateInstallAppUi();
+      return;
+    }
+    try {
+      await navigator.serviceWorker.register('./service-worker.js', { scope: './' });
+    } catch (error) {
+      console.warn('SanityVideo service worker registration failed.', error);
+      setInstallStatus('SanityVideo could not prepare offline app installation in this browser.');
+    }
+    updateInstallAppUi();
+  }
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    updateInstallAppUi();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    updateInstallAppUi();
+    setStatus('SanityVideo was installed successfully.');
+  });
+
+  window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change', updateInstallAppUi);
 
 
   function compatibilityStateLabel(ok, partial = false) {
@@ -4751,6 +4879,7 @@
   if (els.closeUiSettingsBtn) els.closeUiSettingsBtn.addEventListener('click', closeUiSettings);
   if (els.doneUiSettingsBtn) els.doneUiSettingsBtn.addEventListener('click', closeUiSettings);
   if (els.resetUiScalingBtn) els.resetUiScalingBtn.addEventListener('click', resetUiScaling);
+  if (els.installAppBtn) els.installAppBtn.addEventListener('click', requestSanityVideoInstall);
   for (const input of els.uiScaleInputs || []) {
     input.addEventListener('input', () => setUiScale(input.dataset.uiScale, input.value, false));
     input.addEventListener('change', () => setUiScale(input.dataset.uiScale, input.value, true));
@@ -5140,6 +5269,8 @@
 
   loadUiScalePreferences();
   applyUiScalePreferences({ persist: false, rerenderTimeline: false });
+  updateInstallAppUi();
+  window.addEventListener('load', registerSanityVideoServiceWorker, { once: true });
   setStatus(`Ready. ${APP_BRAND} is armed. Export As supports browser-detected MOV, MP4, WebM, GIF, dedicated M4A, WAV, compressed audio, and still-image formats.`);
   createLayer('Layer 1');
   createLayer('Layer 2');

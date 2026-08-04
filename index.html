@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>SanityVideo © 2026</title>
 <link rel="icon" href="SanityVideoLarge.ico" type="image/x-icon" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icons/sanityvideo-192.png" />
+<meta name="theme-color" content="#0f0f10" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="SanityVideo" />
 <style>
   :root {
     --bg: #050505;
@@ -808,6 +814,56 @@
   .ui-scale-value { text-align:right; font-variant-numeric:tabular-nums; color:var(--accent-2); font-size:12px; }
   .ui-settings-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; flex-wrap:wrap; }
   .ui-settings-note { margin-top:10px; }
+  .ui-settings-section {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.035);
+  }
+  .ui-settings-section:first-of-type { margin-top: 12px; }
+  .ui-settings-section h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    color: var(--accent-2);
+  }
+  .ui-settings-section .status { line-height: 1.45; }
+  .install-app-layout {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .install-app-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 13px;
+    object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.38);
+  }
+  .install-app-copy strong { display:block; margin-bottom:4px; }
+  .install-app-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .install-app-actions button { flex: 1 1 190px; }
+  .install-app-status {
+    margin-top: 10px;
+    padding: 10px 11px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.24);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .install-ios-steps {
+    margin: 10px 0 0;
+    padding-left: 20px;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .install-ios-steps[hidden] { display:none; }
 
 
   /* Export As */
@@ -2035,27 +2091,56 @@ software or marks without permission is prohibited. You may use and study it fre
 </div>
 
 
-<button id="uiSettingsBtn" class="ui-settings-button" type="button" title="Interface scaling settings" aria-label="Open interface scaling settings" aria-controls="uiSettingsOverlay" aria-expanded="false">⚙</button>
+<button id="uiSettingsBtn" class="ui-settings-button" type="button" title="SanityVideo settings" aria-label="Open SanityVideo settings" aria-controls="uiSettingsOverlay" aria-expanded="false">⚙</button>
 <div id="uiSettingsOverlay" class="ui-settings-overlay" hidden>
   <section class="ui-settings-panel" role="dialog" aria-modal="true" aria-labelledby="uiSettingsTitle">
     <div class="ui-settings-heading">
       <div>
-        <h2 id="uiSettingsTitle">Window Scaling</h2>
-        <div class="status">Scale each workspace window independently. Settings are saved on this device.</div>
+        <h2 id="uiSettingsTitle">Settings</h2>
+        <div class="status">Adjust the workspace and install SanityVideo as a standalone app.</div>
       </div>
       <button id="closeUiSettingsBtn" class="ui-settings-close" type="button" aria-label="Close settings">×</button>
     </div>
-    <div class="ui-scale-list">
-      <div class="ui-scale-row"><label for="scaleTopbar">Top Toolbar</label><input id="scaleTopbar" data-ui-scale="topbar" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTopbar">100%</output></div>
-      <div class="ui-scale-row"><label for="scaleProject">Project / File Window</label><input id="scaleProject" data-ui-scale="project" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleProject">100%</output></div>
-      <div class="ui-scale-row"><label for="scaleClip">Clip Editor Window</label><input id="scaleClip" data-ui-scale="clip" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleClip">100%</output></div>
-      <div class="ui-scale-row"><label for="scalePreview">Preview Window</label><input id="scalePreview" data-ui-scale="preview" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scalePreview">100%</output></div>
-      <div class="ui-scale-row"><label for="scaleInspector">Preview Info Window</label><input id="scaleInspector" data-ui-scale="inspector" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleInspector">100%</output></div>
-      <div class="ui-scale-row"><label for="scaleTimeline">Timeline Window</label><input id="scaleTimeline" data-ui-scale="timeline" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTimeline">100%</output></div>
-    </div>
-    <div class="status ui-settings-note">Preview scaling changes the displayed preview size only; it never changes the exported canvas resolution. Timeline scaling changes row height and controls without changing clip timing.</div>
+
+    <section class="ui-settings-section" aria-labelledby="windowScalingTitle">
+      <h3 id="windowScalingTitle">Window Scaling</h3>
+      <div class="status">Scale each workspace window independently. Settings are saved on this device.</div>
+      <div class="ui-scale-list">
+        <div class="ui-scale-row"><label for="scaleTopbar">Top Toolbar</label><input id="scaleTopbar" data-ui-scale="topbar" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTopbar">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleProject">Project / File Window</label><input id="scaleProject" data-ui-scale="project" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleProject">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleClip">Clip Editor Window</label><input id="scaleClip" data-ui-scale="clip" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleClip">100%</output></div>
+        <div class="ui-scale-row"><label for="scalePreview">Preview Window</label><input id="scalePreview" data-ui-scale="preview" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scalePreview">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleInspector">Preview Info Window</label><input id="scaleInspector" data-ui-scale="inspector" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleInspector">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleTimeline">Timeline Window</label><input id="scaleTimeline" data-ui-scale="timeline" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTimeline">100%</output></div>
+      </div>
+      <div class="status ui-settings-note">Preview scaling changes only the displayed preview size; it never changes export resolution. Timeline scaling changes row height and controls without changing clip timing.</div>
+      <div class="ui-settings-actions">
+        <button id="resetUiScalingBtn" type="button">Reset All to 100%</button>
+      </div>
+    </section>
+
+    <section class="ui-settings-section" aria-labelledby="installAppTitle">
+      <h3 id="installAppTitle">Install / Download App</h3>
+      <div class="status">Install SanityVideo on this device so it opens in its own app window instead of requiring a browser tab.</div>
+      <div class="install-app-layout">
+        <img class="install-app-icon" src="icons/sanityvideo-192.png" alt="" aria-hidden="true" />
+        <div class="install-app-copy">
+          <strong>SanityVideo App</strong>
+          <div class="status">Desktop, Android, iPhone, and iPad installation support.</div>
+        </div>
+      </div>
+      <div class="install-app-actions">
+        <button id="installAppBtn" class="primary" type="button" aria-controls="iosInstallSteps" aria-expanded="false">Install SanityVideo App</button>
+      </div>
+      <div id="installAppStatus" class="install-app-status" role="status" aria-live="polite">Checking installation availability…</div>
+      <ol id="iosInstallSteps" class="install-ios-steps" hidden>
+        <li>Open SanityVideo in Safari.</li>
+        <li>Tap the Share button.</li>
+        <li>Choose <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.</li>
+      </ol>
+    </section>
+
     <div class="ui-settings-actions">
-      <button id="resetUiScalingBtn" type="button">Reset All to 100%</button>
       <button id="doneUiSettingsBtn" class="primary" type="button">Done</button>
     </div>
   </section>
