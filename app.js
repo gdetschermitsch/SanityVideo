@@ -57,6 +57,7 @@
     viewerPane: document.getElementById('viewerPane'),
     previewShell: document.getElementById('previewShell'),
     previewFullscreenBtn: document.getElementById('previewFullscreenBtn'),
+    mobileFullscreenExitBtn: document.getElementById('mobileFullscreenExitBtn'),
     previewFullscreenControls: document.getElementById('previewFullscreenControls'),
     fullscreenPlayBtn: document.getElementById('fullscreenPlayBtn'),
     fullscreenPauseBtn: document.getElementById('fullscreenPauseBtn'),
@@ -559,11 +560,18 @@
   }
 
   function updatePreviewFullscreenButton() {
-    if (!els.previewFullscreenBtn || !els.previewShell) return;
+    if (!els.previewShell) return;
     const active = getFullscreenElement() === els.previewShell || !!state.mobileFullscreenFallback;
-    els.previewFullscreenBtn.textContent = active ? '✕ Exit Full Screen' : '⛶ Full Screen';
-    els.previewFullscreenBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
-    els.previewFullscreenBtn.title = active ? 'Exit full screen' : 'Enter full screen';
+    els.previewShell.classList.toggle('is-fullscreen', active);
+    if (els.previewFullscreenBtn) {
+      els.previewFullscreenBtn.textContent = active ? '✕ Exit Full Screen' : '⛶ Full Screen';
+      els.previewFullscreenBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      els.previewFullscreenBtn.title = active ? 'Exit full screen' : 'Enter full screen';
+    }
+    if (els.mobileFullscreenExitBtn) {
+      els.mobileFullscreenExitBtn.hidden = !active;
+      els.mobileFullscreenExitBtn.setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
   }
 
   function isPreviewFullscreenActive() {
@@ -634,7 +642,14 @@
       }
     } catch (err) {
       console.error(err);
-      setStatus('Full screen was blocked by the browser.');
+      if (!active && els.previewShell) {
+        state.mobileFullscreenFallback = true;
+        els.previewShell.classList.add('mobile-fullscreen-fallback');
+        pokeFullscreenControls();
+        setStatus('Using mobile full-screen mode.');
+      } else {
+        setStatus('Full screen was blocked by the browser.');
+      }
     }
     updatePreviewFullscreenButton();
   }
@@ -4305,6 +4320,11 @@
   els.exportRange?.addEventListener('change', updateExportUi);
   els.exportOverlay?.addEventListener('pointerdown', (event) => { if (event.target === els.exportOverlay && !state.exporting) closeExportDialog(); });
   if (els.previewFullscreenBtn) els.previewFullscreenBtn.addEventListener('click', togglePreviewFullscreen);
+  if (els.mobileFullscreenExitBtn) els.mobileFullscreenExitBtn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await togglePreviewFullscreen();
+  });
   if (els.previewShell) {
     ['pointermove', 'pointerdown'].forEach(evt => {
       els.previewShell.addEventListener(evt, () => pokeFullscreenControls(), { passive: true });
@@ -4685,7 +4705,11 @@
       e.preventDefault();
       closeUiSettings();
     }
-    else if (!typingTarget && e.key === 'Escape' && !isPreviewFullscreenActive()) {
+    else if (!typingTarget && e.key === 'Escape' && isPreviewFullscreenActive()) {
+      e.preventDefault();
+      await togglePreviewFullscreen();
+    }
+    else if (!typingTarget && e.key === 'Escape') {
       e.preventDefault();
       stopPlayback();
       closeClipContextMenu();

@@ -399,6 +399,31 @@
   .preview-fullscreen-btn:hover {
     background: linear-gradient(180deg, rgba(44,44,49,0.96) 0%, rgba(18,18,20,0.96) 100%);
   }
+  .mobile-fullscreen-exit {
+    display: none;
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    z-index: 20;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 30px;
+    font-weight: 300;
+    line-height: 1;
+    color: #fff;
+    background: rgba(10,10,12,0.78);
+    border: 1px solid rgba(255,255,255,0.34);
+    box-shadow: 0 6px 22px rgba(0,0,0,0.46);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    touch-action: manipulation;
+  }
+  .mobile-fullscreen-exit[hidden] { display: none !important; }
   .canvas-shell:fullscreen,
   .canvas-shell:-webkit-full-screen {
     width: 100vw;
@@ -1086,6 +1111,30 @@
       font-weight: 700;
     }
     .mobile-nav .nav-icon { font-size: 18px; line-height: 1; }
+    /* A clean outline cog avoids the oversized circular emoji rendering on mobile. */
+    #mobileSettingsBtn .nav-icon-settings {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    #mobileSettingsBtn .nav-icon-settings svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+      overflow: visible;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* The exit control stays visible even when fullscreen playback controls auto-hide. */
+    .canvas-shell.is-fullscreen .mobile-fullscreen-exit:not([hidden]) { display: inline-flex; }
+    .canvas-shell.is-fullscreen .preview-fullscreen-btn { display: none; }
 
     .clip-context-menu {
       left: max(10px, env(safe-area-inset-left)) !important;
@@ -1671,6 +1720,7 @@
             </div>
           </div>
           <button id="previewFullscreenBtn" class="preview-fullscreen-btn" type="button" title="Toggle full screen">⛶ Full Screen</button>
+          <button id="mobileFullscreenExitBtn" class="mobile-fullscreen-exit" type="button" aria-label="Exit full screen" title="Exit full screen" hidden>×</button>
         </div>
       </div>
       <div class="inspector">
@@ -1724,7 +1774,7 @@ software or marks without permission is prohibited. You may use and study it fre
     <button type="button" data-mobile-view="preview" aria-pressed="true"><span class="nav-icon">▣</span><span>Preview</span></button>
     <button type="button" data-mobile-view="timeline" aria-pressed="false"><span class="nav-icon">≋</span><span>Timeline</span></button>
     <button type="button" data-mobile-view="edit" aria-pressed="false"><span class="nav-icon">✎</span><span>Edit</span></button>
-    <button id="mobileSettingsBtn" type="button" aria-pressed="false" aria-expanded="false" aria-controls="uiSettingsOverlay"><span class="nav-icon">⚙</span><span>Settings</span></button>
+    <button id="mobileSettingsBtn" type="button" aria-pressed="false" aria-expanded="false" aria-controls="uiSettingsOverlay"><span class="nav-icon nav-icon-settings" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.97a1.7 1.7 0 0 0-.34-1.88l-.06-.06L7.03 4.2l.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.04V3h4v.08a1.7 1.7 0 0 0 1.03 1.52 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg></span><span>Settings</span></button>
   </nav>
   <div class="footer">SanityVideo © 2026 — CRUX-TAIN™ 2026.</div>
 </div>
