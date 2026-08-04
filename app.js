@@ -4343,11 +4343,13 @@
     });
   });
 
+  // Empty track space is selection-only. Timeline seeking is intentionally
+  // restricted to the ruler above so taps in the track lanes cannot move
+  // the playhead, especially in the mobile timeline view.
   els.timelineContent.addEventListener('pointerdown', (e) => {
     if (!isPrimaryPointer(e)) return;
     if (e.target.closest('.clip')) return;
     if (e.target.closest('#ruler')) return;
-    setCurrentTimeFromClientX(e.clientX);
     if (!e.shiftKey) {
       state.selectedClipId = null;
       state.selectedClipIds = [];
