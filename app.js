@@ -3,6 +3,7 @@
   const DEFAULT_IMAGE_DURATION = 5;
   const DEFAULT_TEXT_DURATION = 4;
   const EXPORT_FPS = 30;
+  const COMPATIBILITY_STARTUP_STORAGE_KEY = 'sanityvideo-show-compatibility-on-startup-v1';
   const state = {
     layers: [],
     selectedClipId: null,
@@ -175,6 +176,10 @@
     startupOverlay: document.getElementById('startupOverlay'),
     startupCompatGrid: document.getElementById('startupCompatGrid'),
     closeStartupPanelBtn: document.getElementById('closeStartupPanelBtn'),
+    dontShowCompatibilityAgain: document.getElementById('dontShowCompatibilityAgain'),
+    showCompatibilityOnStartup: document.getElementById('showCompatibilityOnStartup'),
+    openCompatibilityBtn: document.getElementById('openCompatibilityBtn'),
+    compatibilityPreferenceStatus: document.getElementById('compatibilityPreferenceStatus'),
     uiSettingsBtn: document.getElementById('uiSettingsBtn'),
     uiSettingsOverlay: document.getElementById('uiSettingsOverlay'),
     closeUiSettingsBtn: document.getElementById('closeUiSettingsBtn'),
@@ -677,13 +682,52 @@
     }
   }
 
-  function openStartupPanel() {
+  function shouldShowCompatibilityOnStartup() {
+    try {
+      return localStorage.getItem(COMPATIBILITY_STARTUP_STORAGE_KEY) !== 'false';
+    } catch (error) {
+      console.warn('Could not read the compatibility-window preference.', error);
+      return true;
+    }
+  }
+
+  function updateCompatibilityPreferenceUi() {
+    const showOnStartup = shouldShowCompatibilityOnStartup();
+    if (els.showCompatibilityOnStartup) els.showCompatibilityOnStartup.checked = showOnStartup;
+    if (els.dontShowCompatibilityAgain) els.dontShowCompatibilityAgain.checked = !showOnStartup;
+    if (els.compatibilityPreferenceStatus) {
+      els.compatibilityPreferenceStatus.textContent = showOnStartup
+        ? 'The compatibility window will open automatically when SanityVideo starts.'
+        : 'Automatic compatibility popups are off. Use “Open Compatibility Window” whenever you need it.';
+    }
+  }
+
+  function setCompatibilityStartupPreference(showOnStartup) {
+    try {
+      localStorage.setItem(COMPATIBILITY_STARTUP_STORAGE_KEY, showOnStartup ? 'true' : 'false');
+    } catch (error) {
+      console.warn('Could not save the compatibility-window preference.', error);
+    }
+    updateCompatibilityPreferenceUi();
+  }
+
+  let startupReturnToSettings = false;
+
+  function openStartupPanel({ returnToSettings = false } = {}) {
+    startupReturnToSettings = !!returnToSettings;
     renderStartupCompatibilityPanel();
+    updateCompatibilityPreferenceUi();
     if (els.startupOverlay) els.startupOverlay.hidden = false;
+    requestAnimationFrame(() => els.closeStartupPanelBtn?.focus({ preventScroll: true }));
   }
 
   function closeStartupPanel() {
     if (els.startupOverlay) els.startupOverlay.hidden = true;
+    const reopenSettings = startupReturnToSettings;
+    startupReturnToSettings = false;
+    if (reopenSettings) {
+      openUiSettings(isMobileLayout() ? els.mobileSettingsBtn : els.uiSettingsBtn);
+    }
   }
 
 
@@ -4872,6 +4916,22 @@
     });
   }
   if (els.closeStartupPanelBtn) els.closeStartupPanelBtn.addEventListener('click', closeStartupPanel);
+  if (els.showCompatibilityOnStartup) {
+    els.showCompatibilityOnStartup.addEventListener('change', () => {
+      setCompatibilityStartupPreference(!!els.showCompatibilityOnStartup.checked);
+    });
+  }
+  if (els.dontShowCompatibilityAgain) {
+    els.dontShowCompatibilityAgain.addEventListener('change', () => {
+      setCompatibilityStartupPreference(!els.dontShowCompatibilityAgain.checked);
+    });
+  }
+  if (els.openCompatibilityBtn) {
+    els.openCompatibilityBtn.addEventListener('click', () => {
+      closeUiSettings();
+      openStartupPanel({ returnToSettings: true });
+    });
+  }
   if (els.uiSettingsBtn) els.uiSettingsBtn.addEventListener('click', () => {
     if (els.uiSettingsOverlay?.hidden) openUiSettings(els.uiSettingsBtn);
     else closeUiSettings();
@@ -5252,6 +5312,10 @@
       e.preventDefault();
       closeExportDialog();
     }
+    else if (e.key === 'Escape' && els.startupOverlay && !els.startupOverlay.hidden) {
+      e.preventDefault();
+      closeStartupPanel();
+    }
     else if (e.key === 'Escape' && els.uiSettingsOverlay && !els.uiSettingsOverlay.hidden) {
       e.preventDefault();
       closeUiSettings();
@@ -5297,6 +5361,7 @@
     if (els.viewerPane) previewResizeObserver.observe(els.viewerPane);
   }
   requestAnimationFrame(updateViewportSideBanners);
-  openStartupPanel();
+  updateCompatibilityPreferenceUi();
+  if (shouldShowCompatibilityOnStartup()) openStartupPanel();
   requestAnimationFrame(frame);
 })();

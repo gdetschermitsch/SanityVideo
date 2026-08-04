@@ -748,6 +748,34 @@
     gap: 10px;
     margin-top: 16px;
   }
+  .compatibility-preference-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 11px 12px;
+    border-radius: 11px;
+    border: 1px solid rgba(255,255,255,0.10);
+    background: rgba(255,255,255,0.035);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.45;
+    cursor: pointer;
+  }
+  .compatibility-preference-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 1px 0 0;
+    accent-color: var(--accent-2);
+  }
+  .compatibility-settings-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
 
 
   /* Independent workspace scaling */
@@ -2102,23 +2130,6 @@ software or marks without permission is prohibited. You may use and study it fre
       <button id="closeUiSettingsBtn" class="ui-settings-close" type="button" aria-label="Close settings">×</button>
     </div>
 
-    <section class="ui-settings-section" aria-labelledby="windowScalingTitle">
-      <h3 id="windowScalingTitle">Window Scaling</h3>
-      <div class="status">Scale each workspace window independently. Settings are saved on this device.</div>
-      <div class="ui-scale-list">
-        <div class="ui-scale-row"><label for="scaleTopbar">Top Toolbar</label><input id="scaleTopbar" data-ui-scale="topbar" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTopbar">100%</output></div>
-        <div class="ui-scale-row"><label for="scaleProject">Project / File Window</label><input id="scaleProject" data-ui-scale="project" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleProject">100%</output></div>
-        <div class="ui-scale-row"><label for="scaleClip">Clip Editor Window</label><input id="scaleClip" data-ui-scale="clip" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleClip">100%</output></div>
-        <div class="ui-scale-row"><label for="scalePreview">Preview Window</label><input id="scalePreview" data-ui-scale="preview" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scalePreview">100%</output></div>
-        <div class="ui-scale-row"><label for="scaleInspector">Preview Info Window</label><input id="scaleInspector" data-ui-scale="inspector" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleInspector">100%</output></div>
-        <div class="ui-scale-row"><label for="scaleTimeline">Timeline Window</label><input id="scaleTimeline" data-ui-scale="timeline" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTimeline">100%</output></div>
-      </div>
-      <div class="status ui-settings-note">Preview scaling changes only the displayed preview size; it never changes export resolution. Timeline scaling changes row height and controls without changing clip timing.</div>
-      <div class="ui-settings-actions">
-        <button id="resetUiScalingBtn" type="button">Reset All to 100%</button>
-      </div>
-    </section>
-
     <section class="ui-settings-section" aria-labelledby="installAppTitle">
       <h3 id="installAppTitle">Install / Download App</h3>
       <div class="status">Install SanityVideo on this device so it opens in its own app window instead of requiring a browser tab.</div>
@@ -2140,6 +2151,36 @@ software or marks without permission is prohibited. You may use and study it fre
       </ol>
     </section>
 
+    <section class="ui-settings-section" aria-labelledby="compatibilitySettingsTitle">
+      <h3 id="compatibilitySettingsTitle">Compatibility Window</h3>
+      <div class="status">Review the browser features SanityVideo can use for preview, audio, and export. You can reopen this check at any time.</div>
+      <label class="compatibility-preference-row" for="showCompatibilityOnStartup">
+        <input id="showCompatibilityOnStartup" type="checkbox" checked />
+        <span>Automatically show the compatibility window when SanityVideo opens.</span>
+      </label>
+      <div class="compatibility-settings-actions">
+        <button id="openCompatibilityBtn" type="button">Open Compatibility Window</button>
+      </div>
+      <div id="compatibilityPreferenceStatus" class="status ui-settings-note" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="ui-settings-section" aria-labelledby="windowScalingTitle">
+      <h3 id="windowScalingTitle">Window Scaling</h3>
+      <div class="status">Scale each workspace window independently. Settings are saved on this device.</div>
+      <div class="ui-scale-list">
+        <div class="ui-scale-row"><label for="scaleTopbar">Top Toolbar</label><input id="scaleTopbar" data-ui-scale="topbar" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTopbar">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleProject">Project / File Window</label><input id="scaleProject" data-ui-scale="project" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleProject">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleClip">Clip Editor Window</label><input id="scaleClip" data-ui-scale="clip" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleClip">100%</output></div>
+        <div class="ui-scale-row"><label for="scalePreview">Preview Window</label><input id="scalePreview" data-ui-scale="preview" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scalePreview">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleInspector">Preview Info Window</label><input id="scaleInspector" data-ui-scale="inspector" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleInspector">100%</output></div>
+        <div class="ui-scale-row"><label for="scaleTimeline">Timeline Window</label><input id="scaleTimeline" data-ui-scale="timeline" type="range" min="50" max="150" step="5" value="100" /><output class="ui-scale-value" for="scaleTimeline">100%</output></div>
+      </div>
+      <div class="status ui-settings-note">Preview scaling changes only the displayed preview size; it never changes export resolution. Timeline scaling changes row height and controls without changing clip timing.</div>
+      <div class="ui-settings-actions">
+        <button id="resetUiScalingBtn" type="button">Reset All to 100%</button>
+      </div>
+    </section>
+
     <div class="ui-settings-actions">
       <button id="doneUiSettingsBtn" class="primary" type="button">Done</button>
     </div>
@@ -2152,6 +2193,10 @@ software or marks without permission is prohibited. You may use and study it fre
     <div class="status">This startup panel verifies the browser pieces needed for preview, Export As, timeline audio, and visual scrub workflows before you start editing.</div>
     <div id="startupCompatGrid" class="compat-grid"></div>
     <div class="startup-warning">Export formats and some media workflows are browser-dependent. SanityVideo only enables formats the current browser reports as recordable.</div>
+    <label class="compatibility-preference-row" for="dontShowCompatibilityAgain">
+      <input id="dontShowCompatibilityAgain" type="checkbox" />
+      <span>Do not show this compatibility window automatically again. It will remain available in Settings.</span>
+    </label>
     <div class="row startup-actions">
       <button id="closeStartupPanelBtn" class="primary" type="button">Enter SanityVideo © 2026</button>
     </div>
