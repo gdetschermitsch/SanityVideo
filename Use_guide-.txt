@@ -1,10 +1,28 @@
 Quick Sanity Video Use guide-
 
+
+MOBILE / TABLET CONTROLS:
+- Use the bottom Preview, Timeline, Edit, and Project tabs.
+- Swipe the empty timeline area to pan horizontally or vertically.
+- Drag a clip body with one finger to move it in time or between layers.
+- Drag the left or right clip edge to trim.
+- Drag the ruler to scrub the playhead.
+- Use Zoom - and Zoom + in the Timeline toolbar instead of a mouse wheel.
+- Turn on Multi-select in Edit, then tap clips to build a selection.
+- Use Clip Actions for copy, paste, split, magnet, fit, undo, redo, and delete.
+- The Project tab contains save, load, export, canvas size, and help controls.
+- Mobile Export As availability depends on the browser and is reported by the startup compatibility check and the Export As format menu.
+
 Tip: Click the “three lines”(context menu) button; to hide this menu.
 
 1.Load or Save a current project(always remember to save incrementally) will be downloaded to the downloads folder as a “Layercut” save. You may rename the file and it will still work.
 
-2.When finished with your project video you may Export as WebM; which records the previewer live; so don’t mess with things until it’s completed its playback. “*Developers note* use a third party converter to get different file types.”
+2.When finished, select Export As. Choose:
+- Video: browser-supported MOV, MP4, or WebM, resolution, 24/30/60 FPS, bitrate, optional audio, optional burned-in preview time, filename, and full/selected/custom range. MOV uses a genuine QuickTime `qt  ` container brand while the codec is selected by the browser.
+- Animated GIF: full/selected/custom range, landscape/vertical/square/custom size, 5–20 FPS, 32–256 colors, optional dithering, looping, and burned-in preview time.
+- Audio Only: uncompressed WAV or browser-supported M4A/MP4, WebM/Opus, or Ogg/Opus. WAV includes 44.1/48/96 kHz, 16-bit PCM, 24-bit PCM, 32-bit float, mono, and stereo controls.
+- Current Frame Image: PNG, JPEG, or WebP at 50%, 100%, or 200% project size.
+MOV/MP4/WebM video, compressed audio, and WAV export run in real time. GIF renders frame-by-frame. Keep the tab active and do not edit or scrub until export finishes. Unsupported formats are hidden automatically.
 
 3.Set canvas size: 1280x720, 1920x1080, or 1024x576(more to come later).
 
@@ -39,3 +57,7 @@ Shift + drag-select behavior is preserved during clip/body/trim-handle selection
 Shift + right-click on empty timeline area → Opens the clip context menu without clearing the current selection
 Right-click on empty timeline area without Shift → Clears selection, then opens the clip context menu
 
+
+UI SCALING
+- Use the top-right settings cog on desktop or the bottom-right Settings tab on mobile to scale the Top Toolbar, Project/File window, Clip Editor, Preview, Preview Info, and Timeline independently from 50% to 150%.
+- Scaling preferences persist locally in the browser. Preview scaling does not change export resolution, and Timeline scaling does not change clip timing.

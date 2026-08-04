@@ -24,6 +24,8 @@
     mediaSourceMap: new WeakMap(),
     exporting: false,
     exportStopRequested: false,
+    exportPlaybackEnd: null,
+    exportRenderScale: 1,
     scrubDrawMode: false,
     scrubDraft: null,
     waveformJobs: new WeakMap(),
@@ -34,6 +36,11 @@
     fullscreenControlsHideTimer: null,
     fullscreenScrubbing: false,
     clipClipboard: [],
+    mobileMultiSelectMode: false,
+    mobileView: 'preview',
+    mobileFullscreenFallback: false,
+    gifEncodingActive: false,
+    uiScale: { topbar: 1, project: 1, clip: 1, preview: 1, inspector: 1, timeline: 1 },
   };
 
   const els = {
@@ -71,6 +78,30 @@
     toggleSnapBtn: document.getElementById('toggleSnapBtn'),
     undoBtn: document.getElementById('undoBtn'),
     redoBtn: document.getElementById('redoBtn'),
+    zoomOutBtn: document.getElementById('zoomOutBtn'),
+    zoomInBtn: document.getElementById('zoomInBtn'),
+    mobileMultiSelectBtn: document.getElementById('mobileMultiSelectBtn'),
+    mobileClipActionsBtn: document.getElementById('mobileClipActionsBtn'),
+    mobileNav: document.getElementById('mobileNav'),
+    mobileSettingsBtn: document.getElementById('mobileSettingsBtn'),
+    mobileSidebarBackdrop: document.getElementById('mobileSidebarBackdrop'),
+    mobileHeaderMenuBtn: document.getElementById('mobileHeaderMenuBtn'),
+    mobileImportBtn: document.getElementById('mobileImportBtn'),
+    mobilePlayPauseBtn: document.getElementById('mobilePlayPauseBtn'),
+    mobileStopBtn: document.getElementById('mobileStopBtn'),
+    mobileUndoBtn: document.getElementById('mobileUndoBtn'),
+    mobileExportBtn: document.getElementById('mobileExportBtn'),
+    mobileHeaderTime: document.getElementById('mobileHeaderTime'),
+    mobileViewLabel: document.getElementById('mobileViewLabel'),
+    mobileProjectCloseBtn: document.getElementById('mobileProjectCloseBtn'),
+    mobileAddLayerBtn: document.getElementById('mobileAddLayerBtn'),
+    mobileDuplicateLayerBtn: document.getElementById('mobileDuplicateLayerBtn'),
+    mobileDeleteLayerBtn: document.getElementById('mobileDeleteLayerBtn'),
+    mobileSplitBtn: document.getElementById('mobileSplitBtn'),
+    mobileSnapBtn: document.getElementById('mobileSnapBtn'),
+    mobileTimelineZoomOutBtn: document.getElementById('mobileTimelineZoomOutBtn'),
+    mobileTimelineZoomInBtn: document.getElementById('mobileTimelineZoomInBtn'),
+    mobileTimelineFitBtn: document.getElementById('mobileTimelineFitBtn'),
     saveProjectBtn: document.getElementById('saveProjectBtn'),
     loadProjectBtn: document.getElementById('loadProjectBtn'),
     loadProjectInput: document.getElementById('loadProjectInput'),
@@ -139,6 +170,61 @@
     startupOverlay: document.getElementById('startupOverlay'),
     startupCompatGrid: document.getElementById('startupCompatGrid'),
     closeStartupPanelBtn: document.getElementById('closeStartupPanelBtn'),
+    uiSettingsBtn: document.getElementById('uiSettingsBtn'),
+    uiSettingsOverlay: document.getElementById('uiSettingsOverlay'),
+    closeUiSettingsBtn: document.getElementById('closeUiSettingsBtn'),
+    doneUiSettingsBtn: document.getElementById('doneUiSettingsBtn'),
+    resetUiScalingBtn: document.getElementById('resetUiScalingBtn'),
+    uiScaleInputs: [...document.querySelectorAll('[data-ui-scale]')],
+    exportOverlay: document.getElementById('exportOverlay'),
+    closeExportBtn: document.getElementById('closeExportBtn'),
+    cancelExportBtn: document.getElementById('cancelExportBtn'),
+    stopExportBtn: document.getElementById('stopExportBtn'),
+    startExportBtn: document.getElementById('startExportBtn'),
+    exportMode: document.getElementById('exportMode'),
+    exportFormat: document.getElementById('exportFormat'),
+    exportFileName: document.getElementById('exportFileName'),
+    exportVideoOptions: document.getElementById('exportVideoOptions'),
+    exportAudioOptions: document.getElementById('exportAudioOptions'),
+    exportRangeOptions: document.getElementById('exportRangeOptions'),
+    exportImageOptions: document.getElementById('exportImageOptions'),
+    exportResolution: document.getElementById('exportResolution'),
+    exportCustomResolution: document.getElementById('exportCustomResolution'),
+    exportWidth: document.getElementById('exportWidth'),
+    exportHeight: document.getElementById('exportHeight'),
+    exportFps: document.getElementById('exportFps'),
+    exportVideoBitrate: document.getElementById('exportVideoBitrate'),
+    exportAudioBitrate: document.getElementById('exportAudioBitrate'),
+    exportCompressedAudioQuality: document.getElementById('exportCompressedAudioQuality'),
+    exportWavSampleRateField: document.getElementById('exportWavSampleRateField'),
+    exportWavBitDepthField: document.getElementById('exportWavBitDepthField'),
+    exportWavChannelsField: document.getElementById('exportWavChannelsField'),
+    exportWavSampleRate: document.getElementById('exportWavSampleRate'),
+    exportWavBitDepth: document.getElementById('exportWavBitDepth'),
+    exportWavChannels: document.getElementById('exportWavChannels'),
+    exportGifOptions: document.getElementById('exportGifOptions'),
+    exportGifResolution: document.getElementById('exportGifResolution'),
+    exportGifCustomResolution: document.getElementById('exportGifCustomResolution'),
+    exportGifWidth: document.getElementById('exportGifWidth'),
+    exportGifHeight: document.getElementById('exportGifHeight'),
+    exportGifFps: document.getElementById('exportGifFps'),
+    exportGifColors: document.getElementById('exportGifColors'),
+    exportGifDither: document.getElementById('exportGifDither'),
+    exportGifLoop: document.getElementById('exportGifLoop'),
+    exportGifIncludeTimeOverlay: document.getElementById('exportGifIncludeTimeOverlay'),
+    exportIncludeAudio: document.getElementById('exportIncludeAudio'),
+    exportIncludeTimeOverlay: document.getElementById('exportIncludeTimeOverlay'),
+    exportRange: document.getElementById('exportRange'),
+    exportCustomRange: document.getElementById('exportCustomRange'),
+    exportStart: document.getElementById('exportStart'),
+    exportEnd: document.getElementById('exportEnd'),
+    exportImageQuality: document.getElementById('exportImageQuality'),
+    exportImageScale: document.getElementById('exportImageScale'),
+    exportCapability: document.getElementById('exportCapability'),
+    exportProgressWrap: document.getElementById('exportProgressWrap'),
+    exportProgress: document.getElementById('exportProgress'),
+    exportProgressText: document.getElementById('exportProgressText'),
+    exportModeShortcuts: [...document.querySelectorAll('[data-export-mode-shortcut]')],
   };
   const ctx = els.canvas.getContext('2d');
 
@@ -154,6 +240,242 @@
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
   function roundToTenth(v) { return Math.round(v * 10) / 10; }
   function setStatus(msg) { els.statusLine.textContent = msg; }
+  function getRenderPixelScale() { return state.exporting ? clamp(Number(state.exportRenderScale) || 1, 0.1, 8) : 1; }
+
+
+  function isMobileLayout() {
+    return window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+  }
+
+  function isPrimaryPointer(e) {
+    return e.pointerType !== 'mouse' || e.button === 0;
+  }
+
+  function beginWindowPointerDrag(e, onMove, onEnd) {
+    const pointerId = e.pointerId;
+    const move = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      if (ev.cancelable) ev.preventDefault();
+      onMove(ev);
+    };
+    const end = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      onEnd(ev);
+    };
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
+
+  function setMobileView(view) {
+    const next = ['preview', 'timeline', 'edit', 'project'].includes(view) ? view : 'preview';
+    state.mobileView = next;
+    if (els.mobileViewLabel) els.mobileViewLabel.textContent = next === 'project' ? 'Project' : next[0].toUpperCase() + next.slice(1);
+    if (els.app) els.app.dataset.mobileView = next === 'project' ? 'preview' : next;
+    if (els.mobileNav) {
+      els.mobileNav.querySelectorAll('[data-mobile-view]').forEach((button) => {
+        button.setAttribute('aria-pressed', button.dataset.mobileView === next ? 'true' : 'false');
+      });
+    }
+    if (els.app) els.app.classList.toggle('mobile-sidebar-open', next === 'project');
+    if (els.mobileSidebarBackdrop) els.mobileSidebarBackdrop.setAttribute('aria-hidden', next === 'project' ? 'false' : 'true');
+    requestAnimationFrame(() => {
+      updateViewportSideBanners();
+      if (next === 'timeline') {
+        renderTracks();
+        renderRuler();
+        renderPlayhead();
+      } else if (next === 'preview') {
+        drawPreview();
+      }
+    });
+  }
+
+  function closeMobileSidebar() {
+    if (!els.app) return;
+    els.app.classList.remove('mobile-sidebar-open');
+    if (els.mobileSidebarBackdrop) els.mobileSidebarBackdrop.setAttribute('aria-hidden', 'true');
+    if (state.mobileView === 'project') setMobileView('preview');
+  }
+
+  function updateMobileMultiSelectButton() {
+    if (!els.mobileMultiSelectBtn) return;
+    els.mobileMultiSelectBtn.textContent = `Multi-select: ${state.mobileMultiSelectMode ? 'On' : 'Off'}`;
+    els.mobileMultiSelectBtn.setAttribute('aria-pressed', state.mobileMultiSelectMode ? 'true' : 'false');
+    els.mobileMultiSelectBtn.classList.toggle('primary', state.mobileMultiSelectMode);
+  }
+
+  function mobileTimelineAnchorX() {
+    if (!els.timelineScroll) return window.innerWidth / 2;
+    const rect = els.timelineScroll.getBoundingClientRect();
+    return rect.left + rect.width / 2;
+  }
+
+  function getTrackHeight() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--track-h');
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 68;
+  }
+
+  function updateMobileTransportUi() {
+    if (els.mobileHeaderTime) els.mobileHeaderTime.textContent = `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
+    if (els.mobilePlayPauseBtn) {
+      els.mobilePlayPauseBtn.innerHTML = state.playing
+        ? '<span aria-hidden="true">Ⅱ</span><span>Pause</span>'
+        : '<span aria-hidden="true">▶</span><span>Play</span>';
+      els.mobilePlayPauseBtn.setAttribute('aria-pressed', state.playing ? 'true' : 'false');
+    }
+    if (els.mobileUndoBtn && els.undoBtn) els.mobileUndoBtn.disabled = els.undoBtn.disabled;
+    if (els.mobileSnapBtn) els.mobileSnapBtn.textContent = `Magnet: ${state.snappingEnabled ? 'On' : 'Off'}`;
+  }
+
+
+  const UI_SCALE_STORAGE_KEY = 'sanityvideo.uiScale.v1';
+  const UI_SCALE_KEYS = ['topbar', 'project', 'clip', 'preview', 'inspector', 'timeline'];
+
+  function normalizeUiScale(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 1;
+    return clamp(Math.round(parsed * 20) / 20, 0.5, 1.5);
+  }
+
+  function loadUiScalePreferences() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(UI_SCALE_STORAGE_KEY) || '{}');
+      for (const key of UI_SCALE_KEYS) state.uiScale[key] = normalizeUiScale(saved[key]);
+    } catch (err) {
+      console.warn('Could not load UI scaling settings.', err);
+    }
+  }
+
+  function saveUiScalePreferences() {
+    try {
+      localStorage.setItem(UI_SCALE_STORAGE_KEY, JSON.stringify(state.uiScale));
+    } catch (err) {
+      console.warn('Could not save UI scaling settings.', err);
+    }
+  }
+
+  function updateUiScaleControls() {
+    for (const input of els.uiScaleInputs || []) {
+      const key = input.dataset.uiScale;
+      const value = normalizeUiScale(state.uiScale[key]);
+      input.value = String(Math.round(value * 100));
+      const output = input.parentElement?.querySelector('.ui-scale-value');
+      if (output) output.textContent = `${Math.round(value * 100)}%`;
+    }
+  }
+
+  function applyUiScalePreferences({ persist = false, rerenderTimeline = true } = {}) {
+    const root = document.documentElement;
+    for (const key of UI_SCALE_KEYS) state.uiScale[key] = normalizeUiScale(state.uiScale[key]);
+
+    const mobile = isMobileLayout();
+    const topbar = state.uiScale.topbar;
+    const project = state.uiScale.project;
+    const clip = state.uiScale.clip;
+    const preview = state.uiScale.preview;
+    const inspector = state.uiScale.inspector;
+    const timeline = state.uiScale.timeline;
+
+    root.style.setProperty('--topbar-ui-scale', String(topbar));
+    root.style.setProperty('--project-ui-scale', String(project));
+    root.style.setProperty('--clip-ui-scale', String(clip));
+    root.style.setProperty('--inspector-ui-scale', String(inspector));
+    root.style.setProperty('--timeline-ui-scale', String(timeline));
+
+    const sidebarWidth = mobile
+      ? Math.min(window.innerWidth * 0.96, Math.min(window.innerWidth * 0.88, 380) * project)
+      : clamp(340 * project, 210, Math.max(210, window.innerWidth * 0.42));
+
+    let clipWidth = 340 * clip;
+    let inspectorWidth = 300 * inspector;
+    if (!mobile) {
+      const workspaceWidth = Math.max(360, window.innerWidth - sidebarWidth);
+      const centerReserve = clamp(window.innerWidth * 0.28, 220, 480);
+      const availableForSideWindows = Math.max(300, workspaceWidth - centerReserve);
+      const desiredSideWindows = clipWidth + inspectorWidth;
+      const fitFactor = Math.min(1, availableForSideWindows / Math.max(1, desiredSideWindows));
+      clipWidth = clamp(clipWidth * fitFactor, 170, Math.max(170, availableForSideWindows - 130));
+      inspectorWidth = clamp(inspectorWidth * fitFactor, 130, Math.max(130, availableForSideWindows - clipWidth));
+    } else {
+      clipWidth = clamp(clipWidth, 220, window.innerWidth);
+      inspectorWidth = clamp(inspectorWidth, 190, window.innerWidth);
+    }
+
+    const timelineListWidth = mobile
+      ? clamp(Math.min(window.innerWidth * 0.44, 170) * timeline, 92, window.innerWidth * 0.58)
+      : clamp(250 * timeline, 150, Math.max(150, window.innerWidth * 0.34));
+
+    root.style.setProperty('--sidebar-w', `${Math.round(sidebarWidth)}px`);
+    root.style.setProperty('--clip-panel-w', `${Math.round(clipWidth)}px`);
+    root.style.setProperty('--inspector-panel-w', `${Math.round(inspectorWidth)}px`);
+    root.style.setProperty('--timeline-list-w', `${Math.round(timelineListWidth)}px`);
+    root.style.setProperty('--track-h', `${Math.round((mobile ? 88 : 68) * timeline)}px`);
+    root.style.setProperty('--ruler-h', `${Math.round(mobile ? Math.max(52, 48 * timeline) : 26 * timeline)}px`);
+
+    const baseTimelineHeight = clamp(window.innerHeight * 0.34, 260, window.innerHeight * 0.42);
+    const timelineHeight = clamp(baseTimelineHeight * timeline, 210, window.innerHeight * 0.7);
+    root.style.setProperty('--timeline-panel-h', `${Math.round(timelineHeight)}px`);
+
+    root.style.setProperty('--preview-shell-width', `${Math.round(preview * 100)}%`);
+    root.style.setProperty('--preview-shell-max-width', `${Math.round(960 * preview)}px`);
+
+    updateUiScaleControls();
+    if (persist) saveUiScalePreferences();
+
+    requestAnimationFrame(() => {
+      updateViewportSideBanners();
+      if (rerenderTimeline) {
+        renderTracks();
+        renderRuler();
+        renderPlayhead();
+      }
+      drawPreview();
+    });
+  }
+
+  function setUiScale(key, percent, persist = true) {
+    if (!UI_SCALE_KEYS.includes(key)) return;
+    state.uiScale[key] = normalizeUiScale(Number(percent) / 100);
+    applyUiScalePreferences({ persist });
+  }
+
+  let uiSettingsReturnFocus = null;
+
+  function openUiSettings(trigger = null) {
+    uiSettingsReturnFocus = trigger || (isMobileLayout() ? els.mobileSettingsBtn : els.uiSettingsBtn);
+    updateUiScaleControls();
+    if (els.uiSettingsOverlay) els.uiSettingsOverlay.hidden = false;
+    if (els.uiSettingsBtn) els.uiSettingsBtn.setAttribute('aria-expanded', 'true');
+    if (els.mobileSettingsBtn) {
+      els.mobileSettingsBtn.setAttribute('aria-expanded', 'true');
+      els.mobileSettingsBtn.setAttribute('aria-pressed', 'true');
+    }
+    const first = els.uiScaleInputs?.[0];
+    if (first) requestAnimationFrame(() => first.focus({ preventScroll: true }));
+  }
+
+  function closeUiSettings() {
+    if (els.uiSettingsOverlay) els.uiSettingsOverlay.hidden = true;
+    if (els.uiSettingsBtn) els.uiSettingsBtn.setAttribute('aria-expanded', 'false');
+    if (els.mobileSettingsBtn) {
+      els.mobileSettingsBtn.setAttribute('aria-expanded', 'false');
+      els.mobileSettingsBtn.setAttribute('aria-pressed', 'false');
+    }
+    const focusTarget = uiSettingsReturnFocus;
+    uiSettingsReturnFocus = null;
+    if (focusTarget && focusTarget.isConnected) focusTarget.focus({ preventScroll: true });
+  }
+
+  function resetUiScaling() {
+    for (const key of UI_SCALE_KEYS) state.uiScale[key] = 1;
+    applyUiScalePreferences({ persist: true });
+    setStatus('All workspace windows reset to 100% scale.');
+  }
 
 
   function compatibilityStateLabel(ok, partial = false) {
@@ -165,7 +487,11 @@
 
   function getStartupCompatibilityReport() {
     const hasMediaRecorder = !!window.MediaRecorder;
-    const exportMime = combinedExportMime();
+    const supportedVideoFormats = getSupportedExportFormats('video');
+    const supportedAudioFormats = getSupportedExportFormats('audio');
+    const supportedGifFormats = getSupportedExportFormats('gif');
+    const supportedImageFormats = getSupportedExportFormats('frame');
+    const exportMime = supportedVideoFormats[0]?.value || '';
     const hasCanvasCapture = !!(els.canvas && typeof els.canvas.captureStream === 'function');
     const audioContextSupported = !!(window.AudioContext || window.webkitAudioContext);
     const mediaElementCapture = (() => {
@@ -175,10 +501,16 @@
     const exportReady = !!(hasMediaRecorder && exportMime && hasCanvasCapture);
     return [
       {
-        title: 'WebM Export',
+        title: 'Video Export',
         ok: exportReady,
         partial: hasMediaRecorder && hasCanvasCapture && !exportMime,
-        detail: exportReady ? `Ready (${exportMime})` : 'This browser cannot do the required WebM recording path.'
+        detail: exportReady ? `${supportedVideoFormats.length} recordable format${supportedVideoFormats.length === 1 ? '' : 's'} detected.` : 'This browser cannot record the preview canvas as video.'
+      },
+      {
+        title: 'Audio / GIF / Image Export',
+        ok: supportedAudioFormats.length > 0 && supportedGifFormats.length > 0 && supportedImageFormats.length > 0,
+        partial: supportedAudioFormats.length === 0 || supportedGifFormats.length === 0 || supportedImageFormats.length === 0,
+        detail: `${supportedAudioFormats.length} audio format${supportedAudioFormats.length === 1 ? '' : 's'}, ${supportedGifFormats.length} animated GIF encoder, and ${supportedImageFormats.length} still-image format${supportedImageFormats.length === 1 ? '' : 's'} detected.`
       },
       {
         title: 'Canvas Capture',
@@ -228,14 +560,14 @@
 
   function updatePreviewFullscreenButton() {
     if (!els.previewFullscreenBtn || !els.previewShell) return;
-    const active = getFullscreenElement() === els.previewShell;
+    const active = getFullscreenElement() === els.previewShell || !!state.mobileFullscreenFallback;
     els.previewFullscreenBtn.textContent = active ? '✕ Exit Full Screen' : '⛶ Full Screen';
     els.previewFullscreenBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
     els.previewFullscreenBtn.title = active ? 'Exit full screen' : 'Enter full screen';
   }
 
   function isPreviewFullscreenActive() {
-    return getFullscreenElement() === els.previewShell;
+    return getFullscreenElement() === els.previewShell || !!state.mobileFullscreenFallback;
   }
 
   function clearFullscreenControlsHideTimer() {
@@ -283,14 +615,22 @@
 
   async function togglePreviewFullscreen() {
     if (!els.previewShell) return;
-    const active = getFullscreenElement() === els.previewShell;
+    const active = getFullscreenElement() === els.previewShell || !!state.mobileFullscreenFallback;
     try {
       if (active) {
-        if (document.exitFullscreen) await document.exitFullscreen();
+        if (state.mobileFullscreenFallback) {
+          state.mobileFullscreenFallback = false;
+          els.previewShell.classList.remove('mobile-fullscreen-fallback');
+        } else if (document.exitFullscreen) await document.exitFullscreen();
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
       } else {
         if (els.previewShell.requestFullscreen) await els.previewShell.requestFullscreen();
         else if (els.previewShell.webkitRequestFullscreen) els.previewShell.webkitRequestFullscreen();
+        else {
+          state.mobileFullscreenFallback = true;
+          els.previewShell.classList.add('mobile-fullscreen-fallback');
+          pokeFullscreenControls();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -511,6 +851,7 @@
     if (els.redoBtn) els.redoBtn.disabled = state.historyIndex >= state.history.length - 1;
     if (els.toggleSnapBtn) els.toggleSnapBtn.textContent = `Magnet: ${state.snappingEnabled ? 'On' : 'Off'}`;
     if (els.clipContextMenu) updateClipContextMenuState();
+    updateMobileTransportUi();
   }
 
   function snapTime(value, ignoreClipId = null) {
@@ -743,7 +1084,7 @@
     if (clip?.invert) pieces.push('invert(100%)');
     for (const effect of ensureEffectsArray(clip)) {
       if (!effectAppliesToClip(effect, clip)) continue;
-      if (effect.type === 'blur' && effect.value > 0) pieces.push(`blur(${effect.value}px)`);
+      if (effect.type === 'blur' && effect.value > 0) pieces.push(`blur(${(effect.value * getRenderPixelScale()).toFixed(2)}px)`);
       if (effect.type === 'grayscale' && effect.value > 0 && !effect.selectiveEnabled) pieces.push(`grayscale(${effect.value}%)`);
       if (effect.type === 'sepia' && effect.value > 0) pieces.push(`sepia(${effect.value}%)`);
       if (effect.type === 'saturate' && effect.value !== 100) pieces.push(`saturate(${effect.value}%)`);
@@ -757,7 +1098,7 @@
       if (effect.type !== 'pixelate' || !effectAppliesToClip(effect, clip)) continue;
       amount = Math.max(amount, clamp(Number(effect.value) || 1, 1, 80));
     }
-    return amount;
+    return amount * getRenderPixelScale();
   }
 
 
@@ -1073,6 +1414,7 @@
     const active = state.scrubDrawMode;
     if (els.toggleScrubDrawBtn) els.toggleScrubDrawBtn.textContent = active ? 'Finish Scrub Draw' : 'Add Scrub Box';
     if (els.toggleScrubDrawBtn2) els.toggleScrubDrawBtn2.textContent = active ? 'Finish Draw' : 'Draw Region';
+    if (els.canvas) els.canvas.classList.toggle('scrub-draw-active', active);
     setStatus(active ? 'Draw a scrub box on the preview canvas.' : 'Scrub draw mode off.');
     drawPreview();
   }
@@ -1118,13 +1460,15 @@
       off.width = sw;
       off.height = sh;
       const octx = off.getContext('2d', { willReadFrequently: true });
+      const renderScale = getRenderPixelScale();
       if (region.mode === 'blur') {
-        octx.filter = `blur(${Math.max(2, region.strength * 0.8)}px)`;
+        octx.filter = `blur(${Math.max(2, region.strength * 0.8 * renderScale)}px)`;
         octx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
         targetCtx.drawImage(off, sx, sy, sw, sh);
       } else {
-        const downW = Math.max(1, Math.round(sw / Math.max(2, region.strength)));
-        const downH = Math.max(1, Math.round(sh / Math.max(2, region.strength)));
+        const scaledStrength = Math.max(2, region.strength * renderScale);
+        const downW = Math.max(1, Math.round(sw / scaledStrength));
+        const downH = Math.max(1, Math.round(sh / scaledStrength));
         off.width = downW;
         off.height = downH;
         octx.imageSmoothingEnabled = false;
@@ -1248,7 +1592,7 @@
       fit: menu.querySelector('[data-action="fit"]'),
       delete: menu.querySelector('[data-action="delete"]'),
     };
-    menu.addEventListener('mousedown', (e) => e.stopPropagation());
+    menu.addEventListener('pointerdown', (e) => e.stopPropagation());
     menu.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn || btn.disabled) return;
@@ -1270,7 +1614,7 @@
       if (!els.clipContextMenu || !els.clipContextMenu.classList.contains('open')) return;
       if (!els.clipContextMenu.contains(e.target)) closeClipContextMenu();
     };
-    window.addEventListener('mousedown', closeOnPointer);
+    window.addEventListener('pointerdown', closeOnPointer);
     window.addEventListener('blur', closeClipContextMenu);
     window.addEventListener('resize', closeClipContextMenu);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeClipContextMenu(); });
@@ -1381,7 +1725,8 @@
     state.clipEls.clear();
     els.trackList.innerHTML = '';
     els.tracksArea.innerHTML = '';
-    els.tracksArea.style.height = (state.layers.length * 68) + 'px';
+    const trackHeight = getTrackHeight();
+    els.tracksArea.style.height = (state.layers.length * trackHeight) + 'px';
 
     state.layers.forEach((layer, index) => {
       const row = document.createElement('div');
@@ -1456,7 +1801,8 @@
         clipEl.className = 'clip' + (clip.id === state.selectedClipId ? ' selected' : '') + (isClipSelected(clip.id) && clip.id !== state.selectedClipId ? ' multi-selected' : '') + (clip.kind === 'transition' ? ' transition-clip' : '');
         clipEl.dataset.kind = clip.kind;
         clipEl.style.left = (clip.start * state.pxPerSecond) + 'px';
-        clipEl.style.top = (index * 68 + 7) + 'px';
+        const trackInset = isMobileLayout() ? 8 : 7;
+        clipEl.style.top = (index * trackHeight + trackInset) + 'px';
         clipEl.style.width = Math.max(24, clip.duration * state.pxPerSecond) + 'px';
         const transitionMeta = clip.kind === 'transition' ? `<div class="transition-badge">${escapeHtml(String(clip.transitionType || 'crossfade'))}</div>` : '';
         const waveform = clip.kind === 'audio' && clip.waveformDataUrl ? `<div class="waveform-strip" style="background-image:url('${clip.waveformDataUrl}')"></div>` : '';
@@ -1495,10 +1841,11 @@
     const rightHandle = clipEl.querySelector('.right');
     const body = clipEl.querySelector('.clip-body');
 
-    clipEl.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+    clipEl.addEventListener('pointerdown', (e) => {
+      if (!isPrimaryPointer(e)) return;
       e.stopPropagation();
-      selectClip(clip.id, layer.id, e.shiftKey);
+      const additive = !!e.shiftKey || (isMobileLayout() && state.mobileMultiSelectMode);
+      selectClip(clip.id, layer.id, additive);
     });
     clipEl.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -1508,22 +1855,27 @@
       openClipContextMenu(e.clientX, e.clientY);
     });
 
-    body.addEventListener('mousedown', (e) => {
+    body.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
-      if (e.button !== 0) return;
-      if (!e.shiftKey && !isClipSelected(clip.id)) selectClip(clip.id, layer.id, false);
-      else selectClip(clip.id, layer.id, e.shiftKey);
+      if (!isPrimaryPointer(e)) return;
+      if (e.cancelable) e.preventDefault();
+      const additive = !!e.shiftKey || (isMobileLayout() && state.mobileMultiSelectMode);
+      if (!isClipSelected(clip.id)) selectClip(clip.id, layer.id, additive);
+      else if (!additive) selectClip(clip.id, layer.id, false);
       const selectedInfos = getSelectedClipInfos();
       if (!selectedInfos.length) return;
       const startX = e.clientX;
       const startY = e.clientY;
+      let moved = false;
       const bases = selectedInfos.map(({ layer, clip }) => ({ clip, start: clip.start, layerIndex: state.layers.indexOf(layer) }));
       const anchorLayerIndex = bases[0].layerIndex;
-      const onMove = (ev) => {
+      beginWindowPointerDrag(e, (ev) => {
         const dx = ev.clientX - startX;
         const dy = ev.clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
         const deltaTime = dx / state.pxPerSecond;
-        const layerShift = clamp(Math.floor((anchorLayerIndex * 68 + dy) / 68), 0, state.layers.length - 1) - anchorLayerIndex;
+        const trackHeight = getTrackHeight();
+        const layerShift = clamp(Math.floor((anchorLayerIndex * trackHeight + dy) / trackHeight), 0, state.layers.length - 1) - anchorLayerIndex;
         for (const base of bases) {
           base.clip.start = snapTime(Math.max(0, base.start + deltaTime), base.clip.id);
           const desiredLayerIndex = clamp(base.layerIndex + layerShift, 0, state.layers.length - 1);
@@ -1539,26 +1891,25 @@
         updateProjectDuration();
         renderTracks();
         renderSelection();
-      };
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        pushHistory('Move clips');
-      };
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
+      }, () => {
+        if (moved) pushHistory('Move clips');
+      });
     });
 
-    leftHandle.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+    leftHandle.addEventListener('pointerdown', (e) => {
+      if (!isPrimaryPointer(e)) return;
       e.stopPropagation();
-      selectClip(clip.id, layer.id, e.shiftKey);
+      if (e.cancelable) e.preventDefault();
+      const additive = !!e.shiftKey || (isMobileLayout() && state.mobileMultiSelectMode);
+      if (!isClipSelected(clip.id)) selectClip(clip.id, layer.id, additive);
       const selectedInfos = getSelectedClipInfos();
       if (!selectedInfos.length) return;
       const startX = e.clientX;
+      let moved = false;
       const bases = selectedInfos.map(({ clip }) => ({ clip, start: clip.start, duration: clip.duration, trimStart: Number(clip.trimStart) || 0 }));
-      const onMove = (ev) => {
+      beginWindowPointerDrag(e, (ev) => {
         const delta = roundToTenth((ev.clientX - startX) / state.pxPerSecond);
+        if (Math.abs(delta) > 0.001) moved = true;
         for (const base of bases) {
           let newStart = snapTime(Math.max(0, base.start + delta), base.clip.id);
           const shift = newStart - base.start;
@@ -1570,26 +1921,25 @@
         updateProjectDuration();
         renderTracks();
         renderSelection();
-      };
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        pushHistory('Trim clip start');
-      };
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
+      }, () => {
+        if (moved) pushHistory('Trim clip start');
+      });
     });
 
-    rightHandle.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+    rightHandle.addEventListener('pointerdown', (e) => {
+      if (!isPrimaryPointer(e)) return;
       e.stopPropagation();
-      selectClip(clip.id, layer.id, e.shiftKey);
+      if (e.cancelable) e.preventDefault();
+      const additive = !!e.shiftKey || (isMobileLayout() && state.mobileMultiSelectMode);
+      if (!isClipSelected(clip.id)) selectClip(clip.id, layer.id, additive);
       const selectedInfos = getSelectedClipInfos();
       if (!selectedInfos.length) return;
       const startX = e.clientX;
+      let moved = false;
       const bases = selectedInfos.map(({ clip }) => ({ clip, duration: clip.duration }));
-      const onMove = (ev) => {
+      beginWindowPointerDrag(e, (ev) => {
         const delta = roundToTenth((ev.clientX - startX) / state.pxPerSecond);
+        if (Math.abs(delta) > 0.001) moved = true;
         for (const base of bases) {
           base.clip.duration = roundToTenth(Math.max(0.3, base.duration + delta));
           normalizeClipTiming(base.clip);
@@ -1597,14 +1947,9 @@
         updateProjectDuration();
         renderTracks();
         renderSelection();
-      };
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        pushHistory('Trim clip end');
-      };
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
+      }, () => {
+        if (moved) pushHistory('Trim clip end');
+      });
     });
   }
 
@@ -1966,7 +2311,8 @@
       drawMediaFit(clip.element, width, height, clip, targetCtx);
       targetCtx.restore();
     } else if (clip.kind === 'text') {
-      const fontSize = Math.max(12, Number(clip.fontSize) || 48);
+      const renderScale = getRenderPixelScale();
+      const fontSize = Math.max(8, (Number(clip.fontSize) || 48) * renderScale);
       const c = ensureClipDefaults(clip);
       const anim = getTextAnimState(clip, state.currentTime);
       const selectiveGrayscale = getSelectiveGrayscaleState(clip);
@@ -1982,9 +2328,9 @@
         drawCtx.lineJoin = 'round';
         drawCtx.lineWidth = Math.max(2, Math.floor(fontSize * 0.08));
         drawCtx.shadowColor = `rgba(0,0,0,${0.45 * shadow})`;
-        drawCtx.shadowBlur = 18 * shadow;
+        drawCtx.shadowBlur = 18 * shadow * renderScale;
         const clipScale = Math.max(0.1, Number(c.scale) || 1) * anim.scale;
-        drawCtx.translate(width / 2 + (Number(c.posX) || 0) * width, height * 0.82 + (Number(c.posY) || 0) * height - anim.translateY);
+        drawCtx.translate(width / 2 + (Number(c.posX) || 0) * width, height * 0.82 + (Number(c.posY) || 0) * height - (anim.translateY * renderScale));
         drawCtx.rotate((Number(c.rotation) || 0) * Math.PI / 180);
         drawCtx.scale(clipScale, clipScale);
         const maxWidth = width * 0.84;
@@ -2099,15 +2445,17 @@
     }
     if (state.scrubDrawMode) drawScrubDraft();
     if (state.showPreviewTimeOverlay) {
+      const renderScale = getRenderPixelScale();
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.font = '14px Arial';
-      ctx.fillText(formatTime(state.currentTime), 12, height - 14);
+      ctx.font = `${Math.max(9, 14 * renderScale)}px Arial`;
+      ctx.fillText(formatTime(state.currentTime), 12 * renderScale, height - (14 * renderScale));
     }
   }
 
   function renderPlayhead() {
     els.playhead.style.left = (state.currentTime * state.pxPerSecond) + 'px';
     els.timeDisplay.textContent = `${formatTime(state.currentTime)} / ${formatTime(state.duration)}`;
+    updateMobileTransportUi();
     syncFullscreenControls();
   }
 
@@ -2129,8 +2477,9 @@
     state.lastFrameTime = now;
     if (state.playing) {
       state.currentTime += dt;
-      if (state.currentTime > state.duration) {
-        state.currentTime = state.duration;
+      const playbackEnd = state.exporting && Number.isFinite(state.exportPlaybackEnd) ? state.exportPlaybackEnd : state.duration;
+      if (state.currentTime > playbackEnd) {
+        state.currentTime = playbackEnd;
         state.playing = false;
         syncAudioVideo();
       }
@@ -2755,16 +3104,127 @@
     setStatus(`${APP_BRAND} project loaded.`);
   }
 
-  function combinedExportMime() {
-    const candidates = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm'
-    ];
-    for (const type of candidates) {
-      if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) return type;
+  const QUICKTIME_EXPORT_VALUE = 'video/quicktime';
+  const M4A_EXPORT_VALUE = 'audio/m4a';
+  const M4A_RECORDER_MIMES = [
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/mp4',
+    'video/mp4;codecs=mp4a.40.2',
+    'video/mp4',
+  ];
+  const QUICKTIME_NATIVE_MIMES = [
+    'video/quicktime;codecs=avc1.42E01E,mp4a.40.2',
+    'video/quicktime',
+  ];
+  const QUICKTIME_ISO_SOURCE_MIMES = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
+  ];
+  const VIDEO_EXPORT_FORMATS = [
+    { value: QUICKTIME_EXPORT_VALUE, label: 'MOV — QuickTime Container (Browser Codec)', extension: 'mov', quickTime: true },
+    { value: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', label: 'MP4 — H.264 / AAC', extension: 'mp4' },
+    { value: 'video/mp4', label: 'MP4 — Browser Default', extension: 'mp4' },
+    { value: 'video/webm;codecs=vp9,opus', label: 'WebM — VP9 / Opus', extension: 'webm' },
+    { value: 'video/webm;codecs=vp8,opus', label: 'WebM — VP8 / Opus', extension: 'webm' },
+    { value: 'video/webm', label: 'WebM — Browser Default', extension: 'webm' },
+  ];
+  const AUDIO_EXPORT_FORMATS = [
+    { value: M4A_EXPORT_VALUE, label: 'M4A — Browser MP4 Audio', extension: 'm4a', m4a: true },
+    { value: 'audio/wav', label: 'WAV — Uncompressed PCM', extension: 'wav', native: true },
+    { value: 'audio/webm;codecs=opus', label: 'WebM Audio — Opus', extension: 'webm' },
+    { value: 'audio/webm', label: 'WebM Audio — Browser Default', extension: 'webm' },
+    { value: 'audio/ogg;codecs=opus', label: 'Ogg Audio — Opus', extension: 'ogg' },
+  ];
+  const GIF_EXPORT_FORMATS = [
+    { value: 'image/gif', label: 'GIF — Animated', extension: 'gif', native: true },
+  ];
+  const IMAGE_EXPORT_FORMATS = [
+    { value: 'image/png', label: 'PNG — Lossless', extension: 'png' },
+    { value: 'image/jpeg', label: 'JPEG — Compressed', extension: 'jpg' },
+    { value: 'image/webp', label: 'WebP — Compressed', extension: 'webp' },
+  ];
+
+  function recorderSupports(type) {
+    if (!window.MediaRecorder || !type) return false;
+    try { return MediaRecorder.isTypeSupported(type); } catch (err) { return false; }
+  }
+
+  function canvasSupportsImageType(type) {
+    if (!els.canvas || typeof els.canvas.toDataURL !== 'function') return false;
+    if (type === 'image/png') return true;
+    try { return els.canvas.toDataURL(type).startsWith(`data:${type}`); } catch (err) { return false; }
+  }
+
+  function resolveQuickTimeRecorderMime() {
+    return QUICKTIME_NATIVE_MIMES.find(recorderSupports)
+      || QUICKTIME_ISO_SOURCE_MIMES.find(recorderSupports)
+      || '';
+  }
+
+  function resolveM4aRecorderMime() {
+    return M4A_RECORDER_MIMES.find(recorderSupports) || '';
+  }
+
+  function resolveRecorderMimeForExport(mode, requestedType) {
+    if (mode === 'video' && requestedType === QUICKTIME_EXPORT_VALUE) return resolveQuickTimeRecorderMime();
+    if (mode === 'audio' && requestedType === M4A_EXPORT_VALUE) return resolveM4aRecorderMime();
+    return recorderSupports(requestedType) ? requestedType : '';
+  }
+
+  function getSupportedExportFormats(mode) {
+    if (mode === 'audio') {
+      const wavAvailable = !!(window.AudioContext || window.webkitAudioContext);
+      return AUDIO_EXPORT_FORMATS.filter(item => item.value === 'audio/wav' ? wavAvailable : item.m4a ? !!resolveM4aRecorderMime() : recorderSupports(item.value));
     }
-    return '';
+    if (mode === 'gif') {
+      const ok = !!(els.canvas && els.canvas.getContext && window.Blob && window.Uint8Array);
+      return ok ? GIF_EXPORT_FORMATS.slice() : [];
+    }
+    if (mode === 'frame') return IMAGE_EXPORT_FORMATS.filter(item => canvasSupportsImageType(item.value));
+    return VIDEO_EXPORT_FORMATS.filter(item => item.quickTime ? !!resolveQuickTimeRecorderMime() : recorderSupports(item.value));
+  }
+
+  function getExportInfrastructureStatus(mode) {
+    if (mode === 'gif') {
+      const ok = !!(els.canvas && els.canvas.getContext && window.Blob && window.Uint8Array);
+      return { ok, detail: ok ? 'Frame-by-frame GIF encoding is available.' : 'Animated GIF encoding is unavailable in this browser.' };
+    }
+    if (mode === 'frame') {
+      const ok = !!(els.canvas && typeof els.canvas.toBlob === 'function');
+      return { ok, detail: ok ? 'Canvas image encoding is available.' : 'Canvas image encoding is unavailable in this browser.' };
+    }
+    if (mode === 'audio') {
+      const ok = !!(window.MediaRecorder && (window.AudioContext || window.webkitAudioContext));
+      return { ok, detail: ok ? 'Browser audio recording is available.' : 'Browser audio recording support is unavailable.' };
+    }
+    const ok = !!(window.MediaRecorder && els.canvas && typeof els.canvas.captureStream === 'function');
+    return { ok, detail: ok ? 'Canvas video recording is available.' : 'Canvas video recording support is unavailable.' };
+  }
+
+  function combinedExportMime() {
+    return getSupportedExportFormats('video')[0]?.value || '';
+  }
+
+  function extensionForMime(type, mode = 'video') {
+    const normalized = String(type || '').toLowerCase();
+    const pools = mode === 'audio' ? AUDIO_EXPORT_FORMATS : mode === 'gif' ? GIF_EXPORT_FORMATS : mode === 'frame' ? IMAGE_EXPORT_FORMATS : VIDEO_EXPORT_FORMATS;
+    const exact = pools.find(item => item.value === type)?.extension;
+    if (exact) return exact;
+    if (normalized.includes('quicktime') || normalized.includes('mov')) return 'mov';
+    if (normalized.includes('wav')) return 'wav';
+    if (normalized.includes('gif')) return 'gif';
+    if (type === M4A_EXPORT_VALUE || normalized.includes('m4a') || normalized.includes('mp4')) return mode === 'audio' ? 'm4a' : 'mp4';
+    if (normalized.includes('ogg')) return 'ogg';
+    if (normalized.includes('jpeg')) return 'jpg';
+    if (normalized.includes('webp')) return 'webp';
+    if (normalized.includes('png')) return 'png';
+    if (mode === 'gif') return 'gif';
+    return mode === 'frame' ? 'png' : mode === 'audio' ? 'wav' : 'webm';
+  }
+
+  function normalizeExportBaseName(value) {
+    const raw = String(value || 'sanityvideo_export').trim().replace(/\.[a-z0-9]{2,5}$/i, '');
+    return sanitizeEmbeddedFileName(raw || 'sanityvideo_export', 'sanityvideo_export').slice(0, 120);
   }
 
   function applyToSelectedClips(mutator, predicate = null) {
@@ -2797,73 +3257,865 @@
     pushHistory('Reset clip control');
   }
 
-  async function exportVideo() {
-    if (state.exporting) return;
-    const mimeType = combinedExportMime();
-    if (!mimeType) {
-      alert('This browser does not expose a usable WebM MediaRecorder export format. Tiny browser gremlin says no.');
-      return;
+  function getSelectedExportRange() {
+    const infos = getSelectedClipInfos();
+    if (!infos.length) return null;
+    const start = Math.min(...infos.map(info => Number(info.clip.start) || 0));
+    const end = Math.max(...infos.map(info => (Number(info.clip.start) || 0) + (Number(info.clip.duration) || 0)));
+    return end > start ? { start, end } : null;
+  }
+
+  function getExportRange() {
+    const mode = els.exportRange?.value || 'full';
+    if (mode === 'selected') {
+      const selected = getSelectedExportRange();
+      if (!selected) throw new Error('Select one or more timeline clips before exporting the selected range.');
+      return selected;
     }
-    const proceed = window.confirm('WebM export records the preview in real time from beginning to end. Keep this tab active and do not scrub, edit, or switch media during export. Continue?');
-    if (!proceed) return;
-    await prepareAudioGraph();
-    state.exporting = true;
-    state.exportStopRequested = false;
-    els.exportBtn.disabled = true;
-    setStatus('Exporting WebM in real time... Keep this tab active and do not edit during playback.');
+    if (mode === 'custom') {
+      const start = clamp(Number(els.exportStart?.value) || 0, 0, Math.max(0, state.duration));
+      const end = clamp(Number(els.exportEnd?.value) || 0, 0, Math.max(0, state.duration));
+      if (!(end > start)) throw new Error('Custom export end must be later than its start.');
+      return { start, end };
+    }
+    return { start: 0, end: Math.max(0.01, state.duration) };
+  }
 
-    const canvasStream = els.canvas.captureStream(EXPORT_FPS);
-    const tracks = [...canvasStream.getVideoTracks()];
-    if (state.audioDestination) tracks.push(...state.audioDestination.stream.getAudioTracks());
-    const exportStream = new MediaStream(tracks);
-    const recorder = new MediaRecorder(exportStream, { mimeType });
-    const chunks = [];
-    recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  function getExportDimensions() {
+    const preset = els.exportResolution?.value || 'project';
+    if (preset === 'project') return { width: els.canvas.width, height: els.canvas.height };
+    if (preset === 'custom') {
+      const width = Math.round(clamp(Number(els.exportWidth?.value) || els.canvas.width, 64, 7680) / 2) * 2;
+      const height = Math.round(clamp(Number(els.exportHeight?.value) || els.canvas.height, 64, 4320) / 2) * 2;
+      return { width, height };
+    }
+    const [width, height] = preset.split('x').map(Number);
+    return { width, height };
+  }
 
-    const done = new Promise((resolve, reject) => {
-      recorder.onerror = (e) => reject(e.error || new Error('Export recorder failed'));
-      recorder.onstop = () => resolve();
+
+  function getGifDimensions() {
+    const preset = els.exportGifResolution?.value || '640x360';
+    if (preset === 'project') return { width: els.canvas.width, height: els.canvas.height };
+    if (preset === 'custom') {
+      return {
+        width: Math.round(clamp(Number(els.exportGifWidth?.value) || 640, 64, 1920)),
+        height: Math.round(clamp(Number(els.exportGifHeight?.value) || 360, 64, 1920)),
+      };
+    }
+    const [width, height] = preset.split('x').map(Number);
+    return { width, height };
+  }
+
+  function updateExportProgress(progress, text) {
+    if (els.exportProgressWrap) els.exportProgressWrap.hidden = false;
+    if (els.exportProgress) els.exportProgress.value = clamp(Number(progress) || 0, 0, 1);
+    if (els.exportProgressText) els.exportProgressText.textContent = text || 'Exporting…';
+  }
+
+  function setExportBusy(busy) {
+    if (els.startExportBtn) els.startExportBtn.disabled = busy;
+    if (els.closeExportBtn) els.closeExportBtn.disabled = busy;
+    if (els.cancelExportBtn) els.cancelExportBtn.disabled = busy;
+    if (els.stopExportBtn) els.stopExportBtn.hidden = !busy;
+    for (const control of els.exportOverlay?.querySelectorAll('input, select') || []) control.disabled = busy;
+  }
+
+  function populateExportFormats() {
+    if (!els.exportFormat) return;
+    const mode = els.exportMode?.value || 'video';
+    const previous = els.exportFormat.value;
+    const formats = getSupportedExportFormats(mode);
+    const infrastructure = getExportInfrastructureStatus(mode);
+    els.exportFormat.innerHTML = '';
+    for (const item of formats) {
+      const option = document.createElement('option');
+      option.value = item.value;
+      option.textContent = item.label;
+      els.exportFormat.appendChild(option);
+    }
+    if (formats.some(item => item.value === previous)) els.exportFormat.value = previous;
+    const modeLabel = mode === 'video' ? 'video recording' : mode === 'gif' ? 'animated GIF encoding' : mode === 'audio' ? 'audio export' : 'still-image encoding';
+    if (els.exportCapability) {
+      const unavailable = formats.length === 0 || !infrastructure.ok;
+      els.exportCapability.classList.toggle('warn', unavailable);
+      const selectedIsMov = mode === 'video' && els.exportFormat?.value === QUICKTIME_EXPORT_VALUE;
+      const selectedIsM4a = mode === 'audio' && els.exportFormat?.value === M4A_EXPORT_VALUE;
+      els.exportCapability.textContent = unavailable
+        ? `${infrastructure.detail}${formats.length ? '' : ` No supported ${modeLabel} format was detected.`}`
+        : selectedIsMov
+          ? 'MOV is available. SanityVideo records the browser-supported ISO media stream and finalizes it with a genuine QuickTime qt container brand; the video/audio codec is selected by the browser.'
+          : selectedIsM4a
+            ? 'M4A is available. SanityVideo records the browser-supported MP4 audio stream and finalizes the file with M4A container branding. AAC is used when the browser exposes it.'
+            : `${formats.length} supported ${modeLabel} format${formats.length === 1 ? '' : 's'} detected. Formats not supported by this browser are intentionally hidden.`;
+    }
+    if (els.startExportBtn) els.startExportBtn.disabled = formats.length === 0 || !infrastructure.ok;
+  }
+
+  function updateExportUi() {
+    const mode = els.exportMode?.value || 'video';
+    const isWav = mode === 'audio' && els.exportFormat?.value === 'audio/wav';
+    els.exportVideoOptions?.classList.toggle('export-mode-hidden', mode !== 'video');
+    els.exportGifOptions?.classList.toggle('export-mode-hidden', mode !== 'gif');
+    els.exportAudioOptions?.classList.toggle('export-mode-hidden', mode !== 'audio');
+    els.exportRangeOptions?.classList.toggle('export-mode-hidden', mode === 'frame');
+    els.exportImageOptions?.classList.toggle('export-mode-hidden', mode !== 'frame');
+    els.exportCustomResolution?.classList.toggle('export-mode-hidden', els.exportResolution?.value !== 'custom');
+    els.exportGifCustomResolution?.classList.toggle('export-mode-hidden', els.exportGifResolution?.value !== 'custom');
+    els.exportCustomRange?.classList.toggle('export-mode-hidden', els.exportRange?.value !== 'custom');
+    els.exportCompressedAudioQuality?.classList.toggle('export-mode-hidden', mode === 'audio' && isWav);
+    els.exportWavSampleRateField?.classList.toggle('export-mode-hidden', !isWav);
+    els.exportWavBitDepthField?.classList.toggle('export-mode-hidden', !isWav);
+    els.exportWavChannelsField?.classList.toggle('export-mode-hidden', !isWav);
+    if (els.exportIncludeTimeOverlay && mode === 'video') els.exportIncludeTimeOverlay.checked = !!state.showPreviewTimeOverlay;
+    populateExportFormats();
+    for (const button of els.exportModeShortcuts || []) {
+      button.setAttribute('aria-pressed', button.dataset.exportModeShortcut === mode ? 'true' : 'false');
+    }
+    const nowWav = mode === 'audio' && els.exportFormat?.value === 'audio/wav';
+    els.exportCompressedAudioQuality?.classList.toggle('export-mode-hidden', nowWav);
+    els.exportWavSampleRateField?.classList.toggle('export-mode-hidden', !nowWav);
+    els.exportWavBitDepthField?.classList.toggle('export-mode-hidden', !nowWav);
+    els.exportWavChannelsField?.classList.toggle('export-mode-hidden', !nowWav);
+  }
+
+  function openExportDialog() {
+    if (!els.exportOverlay || state.exporting) return;
+    if (els.exportEnd) els.exportEnd.value = Math.max(0.01, state.duration).toFixed(2);
+    if (els.exportWidth) els.exportWidth.value = els.canvas.width;
+    if (els.exportHeight) els.exportHeight.value = els.canvas.height;
+    if (els.exportIncludeTimeOverlay) els.exportIncludeTimeOverlay.checked = !!state.showPreviewTimeOverlay;
+    if (els.exportProgressWrap) els.exportProgressWrap.hidden = true;
+    updateExportUi();
+    els.exportOverlay.hidden = false;
+    requestAnimationFrame(() => els.exportMode?.focus({ preventScroll: true }));
+  }
+
+  function closeExportDialog(force = false) {
+    if (state.exporting && !force) return;
+    if (els.exportOverlay) els.exportOverlay.hidden = true;
+    if (els.exportProgressWrap) els.exportProgressWrap.hidden = true;
+    els.exportBtn?.focus({ preventScroll: true });
+  }
+
+  function readUint32BE(bytes, offset) {
+    return ((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3];
+  }
+
+  function writeAscii4(bytes, offset, value) {
+    const padded = String(value || '').padEnd(4, ' ').slice(0, 4);
+    for (let i = 0; i < 4; i++) bytes[offset + i] = padded.charCodeAt(i) & 255;
+  }
+
+  function findIsoBox(bytes, wantedType, maxScan = 1048576) {
+    let offset = 0;
+    const limit = Math.min(bytes.length, maxScan);
+    while (offset + 8 <= limit) {
+      let size = readUint32BE(bytes, offset);
+      const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+      let headerSize = 8;
+      if (size === 1 && offset + 16 <= limit) {
+        const high = readUint32BE(bytes, offset + 8);
+        const low = readUint32BE(bytes, offset + 12);
+        if (high !== 0) return null;
+        size = low;
+        headerSize = 16;
+      } else if (size === 0) {
+        size = bytes.length - offset;
+      }
+      if (type === wantedType) return { offset, size, headerSize };
+      if (!Number.isFinite(size) || size < headerSize) break;
+      offset += size;
+    }
+    return null;
+  }
+
+  async function finalizeQuickTimeMov(blob, sourceMime) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const ftyp = findIsoBox(bytes, 'ftyp');
+    const sourceWasQuickTime = String(sourceMime || '').toLowerCase().includes('quicktime');
+    if (!ftyp || ftyp.size < ftyp.headerSize + 8) {
+      if (sourceWasQuickTime) return new Blob([bytes], { type: QUICKTIME_EXPORT_VALUE });
+      throw new Error('The browser produced video data that could not be finalized as a QuickTime MOV container.');
+    }
+    const payload = ftyp.offset + ftyp.headerSize;
+    writeAscii4(bytes, payload, 'qt  ');
+    if (ftyp.size >= ftyp.headerSize + 12) writeAscii4(bytes, payload + 8, 'qt  ');
+    return new Blob([bytes], { type: QUICKTIME_EXPORT_VALUE });
+  }
+
+  async function finalizeM4a(blob, sourceMime) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const ftyp = findIsoBox(bytes, 'ftyp');
+    if (!ftyp || ftyp.size < ftyp.headerSize + 8) {
+      throw new Error('The browser produced audio data that could not be finalized as an M4A container.');
+    }
+    const payload = ftyp.offset + ftyp.headerSize;
+    writeAscii4(bytes, payload, 'M4A ');
+    if (ftyp.size >= ftyp.headerSize + 12) writeAscii4(bytes, payload + 8, 'M4A ');
+    return new Blob([bytes], { type: 'audio/mp4' });
+  }
+
+  function createMediaRecorder(stream, mimeType, options = {}) {
+    const preferred = { mimeType, ...options };
+    try { return new MediaRecorder(stream, preferred); }
+    catch (firstError) {
+      try { return new MediaRecorder(stream, { mimeType }); }
+      catch (secondError) { return new MediaRecorder(stream); }
+    }
+  }
+
+
+  function littleEndianWord(value) {
+    return [value & 255, (value >>> 8) & 255];
+  }
+
+  function littleEndianDword(value) {
+    return [value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255];
+  }
+
+  function asciiBytes(text) {
+    return Uint8Array.from([...String(text)].map(char => char.charCodeAt(0) & 255));
+  }
+
+  function createUniformGifPalette(colorCount) {
+    const count = [32, 64, 128, 256].includes(Number(colorCount)) ? Number(colorCount) : 256;
+    const bits = Math.round(Math.log2(count));
+    const channelBits = bits === 8 ? [3, 3, 2] : bits === 7 ? [3, 2, 2] : bits === 6 ? [2, 2, 2] : [2, 2, 1];
+    const [rBits, gBits, bBits] = channelBits;
+    const rLevels = 1 << rBits;
+    const gLevels = 1 << gBits;
+    const bLevels = 1 << bBits;
+    const palette = new Uint8Array(count * 3);
+    for (let index = 0; index < count; index++) {
+      const bi = index & (bLevels - 1);
+      const gi = (index >>> bBits) & (gLevels - 1);
+      const ri = (index >>> (bBits + gBits)) & (rLevels - 1);
+      palette[index * 3] = Math.round(ri * 255 / Math.max(1, rLevels - 1));
+      palette[index * 3 + 1] = Math.round(gi * 255 / Math.max(1, gLevels - 1));
+      palette[index * 3 + 2] = Math.round(bi * 255 / Math.max(1, bLevels - 1));
+    }
+    return { palette, bits, rBits, gBits, bBits, rLevels, gLevels, bLevels };
+  }
+
+  function mapRgbaToGifIndexes(rgba, width, height, paletteInfo, dither) {
+    const output = new Uint8Array(width * height);
+    const { rBits, gBits, bBits, rLevels, gLevels, bLevels } = paletteInfo;
+    const matrix = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const rStep = 255 / Math.max(1, rLevels - 1);
+    const gStep = 255 / Math.max(1, gLevels - 1);
+    const bStep = 255 / Math.max(1, bLevels - 1);
+    let sourceIndex = 0;
+    let outputIndex = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++, sourceIndex += 4, outputIndex++) {
+        const threshold = dither ? ((matrix[(y & 3) * 4 + (x & 3)] - 7.5) / 16) : 0;
+        const r = clamp(rgba[sourceIndex] + threshold * rStep, 0, 255);
+        const g = clamp(rgba[sourceIndex + 1] + threshold * gStep, 0, 255);
+        const b = clamp(rgba[sourceIndex + 2] + threshold * bStep, 0, 255);
+        const ri = Math.round(r * (rLevels - 1) / 255);
+        const gi = Math.round(g * (gLevels - 1) / 255);
+        const bi = Math.round(b * (bLevels - 1) / 255);
+        output[outputIndex] = (ri << (gBits + bBits)) | (gi << bBits) | bi;
+      }
+    }
+    return output;
+  }
+
+  function gifLzwEncode(indexes, minimumCodeSize) {
+    if (!indexes?.length) return new Uint8Array([0]);
+    const clearCode = 1 << minimumCodeSize;
+    const endCode = clearCode + 1;
+    let nextCode = endCode + 1;
+    let codeSize = minimumCodeSize + 1;
+    let dictionary = new Map();
+    const bytes = [];
+    let currentByte = 0;
+    let bitCount = 0;
+
+    const writeCode = (code) => {
+      currentByte |= code << bitCount;
+      bitCount += codeSize;
+      while (bitCount >= 8) {
+        bytes.push(currentByte & 255);
+        currentByte >>>= 8;
+        bitCount -= 8;
+      }
+    };
+    const resetDictionary = () => {
+      dictionary = new Map();
+      nextCode = endCode + 1;
+      codeSize = minimumCodeSize + 1;
+    };
+
+    writeCode(clearCode);
+    let prefix = indexes[0];
+    for (let i = 1; i < indexes.length; i++) {
+      const suffix = indexes[i];
+      const key = prefix * 256 + suffix;
+      const found = dictionary.get(key);
+      if (found !== undefined) {
+        prefix = found;
+        continue;
+      }
+      writeCode(prefix);
+      if (nextCode < 4096) {
+        dictionary.set(key, nextCode++);
+        // The decoder creates its first dictionary entry one emitted code later
+        // than the encoder, so the width transition must occur after, not at,
+        // the nominal boundary. This avoids the classic GIF LZW off-by-one bug.
+        if (nextCode > (1 << codeSize) && codeSize < 12) codeSize++;
+      } else {
+        writeCode(clearCode);
+        resetDictionary();
+      }
+      prefix = suffix;
+    }
+    writeCode(prefix);
+    writeCode(endCode);
+    if (bitCount > 0) bytes.push(currentByte & 255);
+
+    const blocks = [];
+    for (let offset = 0; offset < bytes.length; offset += 255) {
+      const length = Math.min(255, bytes.length - offset);
+      blocks.push(length, ...bytes.slice(offset, offset + length));
+    }
+    blocks.push(0);
+    return Uint8Array.from(blocks);
+  }
+
+  class SimpleGifEncoder {
+    constructor(width, height, paletteInfo, loop) {
+      this.width = width;
+      this.height = height;
+      this.paletteInfo = paletteInfo;
+      this.loop = loop;
+      this.parts = [];
+      this.started = false;
+    }
+    start() {
+      if (this.started) return;
+      this.started = true;
+      const tableBits = this.paletteInfo.bits;
+      const packed = 0x80 | ((tableBits - 1) << 4) | (tableBits - 1);
+      this.parts.push(asciiBytes('GIF89a'));
+      this.parts.push(Uint8Array.from([
+        ...littleEndianWord(this.width), ...littleEndianWord(this.height), packed, 0, 0,
+      ]));
+      this.parts.push(this.paletteInfo.palette);
+      if (this.loop) {
+        this.parts.push(Uint8Array.from([
+          0x21, 0xFF, 0x0B,
+          ...asciiBytes('NETSCAPE2.0'),
+          0x03, 0x01, 0x00, 0x00, 0x00,
+        ]));
+      }
+    }
+    addFrame(indexes, delayHundredths) {
+      this.start();
+      const delay = clamp(Math.round(delayHundredths), 1, 65535);
+      this.parts.push(Uint8Array.from([
+        0x21, 0xF9, 0x04, 0x04, ...littleEndianWord(delay), 0x00, 0x00,
+        0x2C, 0x00, 0x00, 0x00, 0x00, ...littleEndianWord(this.width), ...littleEndianWord(this.height), 0x00,
+        Math.max(2, this.paletteInfo.bits),
+      ]));
+      this.parts.push(gifLzwEncode(indexes, Math.max(2, this.paletteInfo.bits)));
+    }
+    finish() {
+      this.start();
+      this.parts.push(Uint8Array.from([0x3B]));
+      return new Blob(this.parts, { type: 'image/gif' });
+    }
+  }
+
+  function waitForMediaEvent(media, eventName, timeoutMs = 800) {
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        media.removeEventListener(eventName, finish);
+        media.removeEventListener('error', finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      media.addEventListener(eventName, finish, { once: true });
+      media.addEventListener('error', finish, { once: true });
     });
+  }
 
+  async function seekVisualMediaForExport(time) {
+    state.currentTime = time;
+    state.playing = false;
+    const waits = [];
+    for (const layer of state.layers) {
+      if (!layer.visible) continue;
+      for (const clip of layer.clips) {
+        const media = clip.element;
+        if (!(media instanceof HTMLVideoElement)) continue;
+        const active = time >= clip.start && time <= clip.start + clip.duration;
+        if (!active) continue;
+        const desired = clamp((Number(clip.trimStart) || 0) + (time - clip.start) * getClipPlaybackRate(clip), 0, Math.max(0, (clip.mediaDuration ?? clip.duration) - 0.03));
+        if (Math.abs((media.currentTime || 0) - desired) > 0.015) {
+          const wait = waitForMediaEvent(media, 'seeked');
+          try { media.currentTime = desired; } catch (err) {}
+          waits.push(wait);
+        } else if (media.readyState < 2) {
+          waits.push(waitForMediaEvent(media, 'loadeddata'));
+        }
+      }
+    }
+    await Promise.all(waits);
+    drawPreview();
+  }
+
+  async function exportAnimatedGif() {
+    const range = getExportRange();
+    const duration = range.end - range.start;
+    if (!(duration > 0)) throw new Error('The GIF export range is empty.');
+    const { width, height } = getGifDimensions();
+    const fps = clamp(Number(els.exportGifFps?.value) || 10, 1, 20);
+    const frameCount = Math.max(1, Math.ceil(duration * fps));
+    if (frameCount > 1800 && !confirm(`This GIF contains ${frameCount} frames and may be very large. Continue?`)) return;
+    const colorCount = Number(els.exportGifColors?.value) || 256;
+    const dither = !!els.exportGifDither?.checked;
+    const loop = !!els.exportGifLoop?.checked;
+    const paletteInfo = createUniformGifPalette(colorCount);
+    const encoder = new SimpleGifEncoder(width, height, paletteInfo, loop);
+    const originalWidth = els.canvas.width;
+    const originalHeight = els.canvas.height;
     const previousTime = state.currentTime;
     const previousPlaying = state.playing;
+    const previousOverlay = state.showPreviewTimeOverlay;
+    const previousRenderScale = state.exportRenderScale;
+    let encodedFrames = 0;
     try {
-      state.currentTime = 0;
+      state.exporting = true;
+      state.gifEncodingActive = true;
+      state.exportStopRequested = false;
+      state.playing = false;
+      state.exportRenderScale = width / Math.max(1, originalWidth);
+      state.showPreviewTimeOverlay = !!els.exportGifIncludeTimeOverlay?.checked;
+      els.canvas.width = width;
+      els.canvas.height = height;
+      setExportBusy(true);
+      const delayHundredths = Math.max(2, Math.round(100 / fps));
+      for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+        if (state.exportStopRequested) break;
+        const frameTime = Math.min(range.end - 0.0001, range.start + frameIndex / fps);
+        await seekVisualMediaForExport(frameTime);
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const indexes = mapRgbaToGifIndexes(imageData.data, width, height, paletteInfo, dither);
+        encoder.addFrame(indexes, delayHundredths);
+        encodedFrames++;
+        const progress = encodedFrames / frameCount;
+        updateExportProgress(progress, `Encoding animated GIF: ${encodedFrames}/${frameCount} frames — ${Math.round(progress * 100)}%.`);
+        setStatus(`Encoding GIF: ${Math.round(progress * 100)}%...`);
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      if (!encodedFrames) throw new Error('GIF export stopped before any frames were encoded.');
+      const blob = encoder.finish();
+      triggerBlobDownload(blob, `${normalizeExportBaseName(els.exportFileName?.value)}.gif`);
+      const partial = encodedFrames < frameCount;
+      updateExportProgress(1, partial ? `Partial GIF saved with ${encodedFrames} frames.` : `Animated GIF complete: ${encodedFrames} frames at ${width}×${height}.`);
+      setStatus(partial ? 'Partial GIF export saved.' : 'Exported animated GIF.');
+    } finally {
+      state.exporting = false;
+      state.gifEncodingActive = false;
+      state.exportStopRequested = false;
+      state.exportRenderScale = previousRenderScale;
+      state.showPreviewTimeOverlay = previousOverlay;
+      state.currentTime = previousTime;
+      state.playing = previousPlaying;
+      if (els.canvas.width !== originalWidth || els.canvas.height !== originalHeight) {
+        els.canvas.width = originalWidth;
+        els.canvas.height = originalHeight;
+      }
+      syncAudioVideo();
+      drawPreview();
+      renderPlayhead();
+      updateViewportSideBanners();
+      setExportBusy(false);
+    }
+  }
+
+  function concatFloat32Chunks(chunks, expectedLength = null) {
+    const available = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const length = expectedLength == null ? available : Math.max(0, expectedLength);
+    const output = new Float32Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      if (offset >= length) break;
+      output.set(chunk.subarray(0, Math.min(chunk.length, length - offset)), offset);
+      offset += Math.min(chunk.length, length - offset);
+    }
+    return output;
+  }
+
+  function resampleFloat32(input, sourceRate, targetRate) {
+    if (!input.length || sourceRate === targetRate) return input.slice();
+    const outputLength = Math.max(1, Math.round(input.length * targetRate / sourceRate));
+    const output = new Float32Array(outputLength);
+    const ratio = sourceRate / targetRate;
+    for (let i = 0; i < outputLength; i++) {
+      const sourcePosition = i * ratio;
+      const left = Math.floor(sourcePosition);
+      const right = Math.min(input.length - 1, left + 1);
+      const mix = sourcePosition - left;
+      output[i] = (input[left] || 0) * (1 - mix) + (input[right] || 0) * mix;
+    }
+    return output;
+  }
+
+  function encodeWavBlob(channels, sampleRate, encoding) {
+    const channelCount = channels.length;
+    const sampleCount = channels[0]?.length || 0;
+    const isFloat = encoding === '32f';
+    const bitDepth = isFloat ? 32 : Number(encoding) === 24 ? 24 : 16;
+    const bytesPerSample = bitDepth / 8;
+    const dataLength = sampleCount * channelCount * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+    const writeAscii = (offset, text) => { for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i)); };
+    writeAscii(0, 'RIFF');
+    view.setUint32(4, 36 + dataLength, true);
+    writeAscii(8, 'WAVE');
+    writeAscii(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, isFloat ? 3 : 1, true);
+    view.setUint16(22, channelCount, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * channelCount * bytesPerSample, true);
+    view.setUint16(32, channelCount * bytesPerSample, true);
+    view.setUint16(34, bitDepth, true);
+    writeAscii(36, 'data');
+    view.setUint32(40, dataLength, true);
+    let offset = 44;
+    for (let i = 0; i < sampleCount; i++) {
+      for (let channel = 0; channel < channelCount; channel++) {
+        const sample = clamp(channels[channel][i] || 0, -1, 1);
+        if (isFloat) {
+          view.setFloat32(offset, sample, true);
+          offset += 4;
+        } else if (bitDepth === 24) {
+          let value = sample < 0 ? Math.round(sample * 0x800000) : Math.round(sample * 0x7FFFFF);
+          if (value < 0) value += 0x1000000;
+          view.setUint8(offset, value & 255);
+          view.setUint8(offset + 1, (value >>> 8) & 255);
+          view.setUint8(offset + 2, (value >>> 16) & 255);
+          offset += 3;
+        } else {
+          const value = sample < 0 ? Math.round(sample * 0x8000) : Math.round(sample * 0x7FFF);
+          view.setInt16(offset, value, true);
+          offset += 2;
+        }
+      }
+    }
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  async function exportWavAudio() {
+    const range = getExportRange();
+    const exportDuration = range.end - range.start;
+    if (!(exportDuration > 0)) throw new Error('The WAV export range is empty.');
+    await prepareAudioGraph();
+    if (!state.audioContext || !state.audioDestination) throw new Error('Timeline audio capture is unavailable.');
+    const sourceRate = state.audioContext.sampleRate;
+    const requestedChannels = Number(els.exportWavChannels?.value) === 1 ? 1 : 2;
+    const targetRate = [44100, 48000, 96000].includes(Number(els.exportWavSampleRate?.value)) ? Number(els.exportWavSampleRate.value) : 48000;
+    const encoding = ['16', '24', '32f'].includes(els.exportWavBitDepth?.value) ? els.exportWavBitDepth.value : '16';
+    const leftChunks = [];
+    const rightChunks = [];
+    const previousTime = state.currentTime;
+    const previousPlaying = state.playing;
+    let mediaSource = null;
+    let processor = null;
+    let muteGain = null;
+    let capturedSamples = 0;
+    let captureEnabled = false;
+    try {
+      state.exporting = true;
+      state.exportStopRequested = false;
+      state.exportPlaybackEnd = range.end;
+      setExportBusy(true);
+      mediaSource = state.audioContext.createMediaStreamSource(state.audioDestination.stream);
+      processor = state.audioContext.createScriptProcessor(4096, 2, 2);
+      muteGain = state.audioContext.createGain();
+      muteGain.gain.value = 0;
+      mediaSource.connect(processor);
+      processor.connect(muteGain);
+      muteGain.connect(state.audioContext.destination);
+      processor.onaudioprocess = event => {
+        if (!captureEnabled) return;
+        const input = event.inputBuffer;
+        const frames = input.length;
+        const left = new Float32Array(frames);
+        left.set(input.getChannelData(0));
+        let right;
+        if (input.numberOfChannels > 1) {
+          right = new Float32Array(frames);
+          right.set(input.getChannelData(1));
+        } else {
+          right = left.slice();
+        }
+        leftChunks.push(left);
+        rightChunks.push(right);
+        capturedSamples += frames;
+      };
+      state.currentTime = range.start;
+      state.playing = false;
+      syncAudioVideo();
+      await new Promise(resolve => setTimeout(resolve, 160));
+      captureEnabled = true;
+      state.lastFrameTime = performance.now();
       state.playing = true;
       syncAudioVideo();
-      recorder.start(1000);
       const startedAt = performance.now();
-      while (!state.exportStopRequested && state.currentTime < state.duration) {
-        const progress = clamp(state.currentTime / Math.max(state.duration, 0.001), 0, 1);
-        setStatus(`Exporting WebM in real time: ${Math.round(progress * 100)}%... Do not scrub or edit.`);
-        await new Promise(r => setTimeout(r, 150));
-        if (performance.now() - startedAt > (state.duration + 2) * 1000) break;
+      while (!state.exportStopRequested && state.currentTime < range.end) {
+        const progress = clamp((state.currentTime - range.start) / exportDuration, 0, 1);
+        updateExportProgress(progress, `Capturing uncompressed WAV in real time: ${Math.round(progress * 100)}% — keep this tab active.`);
+        setStatus(`Exporting WAV: ${Math.round(progress * 100)}%... Keep this tab active.`);
+        await new Promise(resolve => setTimeout(resolve, 120));
+        if (performance.now() - startedAt > (exportDuration + 5) * 1000) break;
+      }
+      captureEnabled = false;
+      state.playing = false;
+      syncAudioVideo();
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const elapsed = clamp(state.currentTime - range.start, 0, exportDuration);
+      const desiredSourceSamples = Math.max(1, Math.round((state.exportStopRequested ? elapsed : exportDuration) * sourceRate));
+      let left = concatFloat32Chunks(leftChunks, desiredSourceSamples);
+      let right = concatFloat32Chunks(rightChunks, desiredSourceSamples);
+      if (requestedChannels === 1) {
+        const mono = new Float32Array(left.length);
+        for (let i = 0; i < mono.length; i++) mono[i] = ((left[i] || 0) + (right[i] || 0)) * 0.5;
+        left = resampleFloat32(mono, sourceRate, targetRate);
+        right = null;
+      } else {
+        left = resampleFloat32(left, sourceRate, targetRate);
+        right = resampleFloat32(right, sourceRate, targetRate);
+      }
+      const blob = encodeWavBlob(requestedChannels === 1 ? [left] : [left, right], targetRate, encoding);
+      triggerBlobDownload(blob, `${normalizeExportBaseName(els.exportFileName?.value)}.wav`);
+      const stopped = state.exportStopRequested;
+      const depthLabel = encoding === '32f' ? '32-bit float' : `${encoding}-bit PCM`;
+      updateExportProgress(1, stopped ? 'Partial WAV export saved.' : `WAV complete: ${targetRate / 1000} kHz, ${depthLabel}, ${requestedChannels === 1 ? 'mono' : 'stereo'}.`);
+      setStatus(stopped ? 'Partial WAV export saved.' : 'Exported uncompressed WAV audio.');
+    } finally {
+      captureEnabled = false;
+      if (processor) {
+        processor.onaudioprocess = null;
+        try { processor.disconnect(); } catch (err) {}
+      }
+      try { mediaSource?.disconnect(); } catch (err) {}
+      try { muteGain?.disconnect(); } catch (err) {}
+      state.playing = false;
+      state.exportPlaybackEnd = null;
+      state.currentTime = previousTime;
+      state.playing = previousPlaying;
+      state.exporting = false;
+      state.exportStopRequested = false;
+      syncAudioVideo();
+      drawPreview();
+      renderPlayhead();
+      setExportBusy(false);
+    }
+  }
+
+  async function exportCurrentFrame() {
+    const mimeType = els.exportFormat.value;
+    const scale = clamp(Number(els.exportImageScale?.value) || 1, 0.25, 4);
+    const quality = clamp((Number(els.exportImageQuality?.value) || 92) / 100, 0.1, 1);
+    const originalWidth = els.canvas.width;
+    const originalHeight = els.canvas.height;
+    const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+    const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+    const originalOverlay = state.showPreviewTimeOverlay;
+    const previousExporting = state.exporting;
+    const previousRenderScale = state.exportRenderScale;
+    try {
+      state.exporting = true;
+      state.exportRenderScale = scale;
+      state.showPreviewTimeOverlay = !!els.exportIncludeTimeOverlay?.checked && originalOverlay;
+      if (scale !== 1) {
+        els.canvas.width = targetWidth;
+        els.canvas.height = targetHeight;
+      }
+      drawPreview();
+      const blob = await new Promise((resolve, reject) => {
+        els.canvas.toBlob(result => result ? resolve(result) : reject(new Error('The browser could not encode this image format.')), mimeType, quality);
+      });
+      const extension = extensionForMime(mimeType, 'frame');
+      triggerBlobDownload(blob, `${normalizeExportBaseName(els.exportFileName?.value)}.${extension}`);
+      updateExportProgress(1, `Image exported at ${targetWidth}×${targetHeight}.`);
+      setStatus(`Exported ${extension.toUpperCase()} still frame.`);
+    } finally {
+      state.showPreviewTimeOverlay = originalOverlay;
+      state.exporting = previousExporting;
+      state.exportRenderScale = previousRenderScale;
+      if (els.canvas.width !== originalWidth || els.canvas.height !== originalHeight) {
+        els.canvas.width = originalWidth;
+        els.canvas.height = originalHeight;
+      }
+      drawPreview();
+      updateViewportSideBanners();
+    }
+  }
+
+  async function exportRecordedMedia(mode) {
+    const requestedType = els.exportFormat.value;
+    const mimeType = resolveRecorderMimeForExport(mode, requestedType);
+    if (!requestedType || !mimeType) throw new Error('The selected format is not recordable in this browser.');
+    const range = getExportRange();
+    const exportDuration = range.end - range.start;
+    if (!(exportDuration > 0)) throw new Error('The export range is empty.');
+
+    await prepareAudioGraph();
+    const previousTime = state.currentTime;
+    const previousPlaying = state.playing;
+    const previousOverlay = state.showPreviewTimeOverlay;
+    const originalWidth = els.canvas.width;
+    const originalHeight = els.canvas.height;
+    let recorder = null;
+    let exportStream = null;
+    let canvasStream = null;
+    const chunks = [];
+
+    try {
+      state.exporting = true;
+      state.exportStopRequested = false;
+      state.exportPlaybackEnd = range.end;
+      setExportBusy(true);
+
+      const tracks = [];
+      if (mode === 'video') {
+        const { width, height } = getExportDimensions();
+        state.exportRenderScale = width / Math.max(1, originalWidth);
+        els.canvas.width = width;
+        els.canvas.height = height;
+        state.showPreviewTimeOverlay = !!els.exportIncludeTimeOverlay?.checked;
+        drawPreview();
+        const fps = clamp(Number(els.exportFps?.value) || 30, 1, 60);
+        if (typeof els.canvas.captureStream !== 'function') throw new Error('Canvas video capture is unavailable in this browser.');
+        canvasStream = els.canvas.captureStream(fps);
+        tracks.push(...canvasStream.getVideoTracks());
+        if (els.exportIncludeAudio?.checked && state.audioDestination) tracks.push(...state.audioDestination.stream.getAudioTracks());
+      } else {
+        if (!state.audioDestination) throw new Error('Timeline audio capture is unavailable.');
+        tracks.push(...state.audioDestination.stream.getAudioTracks());
+      }
+      if (!tracks.length) throw new Error(mode === 'audio' ? 'There are no recordable audio tracks.' : 'No recordable tracks were created.');
+
+      exportStream = new MediaStream(tracks);
+      const options = mode === 'video'
+        ? { videoBitsPerSecond: Number(els.exportVideoBitrate?.value) || 8000000, audioBitsPerSecond: Number(els.exportAudioBitrate?.value) || 192000 }
+        : { audioBitsPerSecond: Number(els.exportAudioBitrate?.value) || 192000 };
+      recorder = createMediaRecorder(exportStream, mimeType, options);
+      recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
+      const done = new Promise((resolve, reject) => {
+        recorder.onerror = event => reject(event.error || new Error('Export recorder failed.'));
+        recorder.onstop = resolve;
+      });
+
+      state.currentTime = range.start;
+      state.playing = false;
+      syncAudioVideo();
+      drawPreview();
+      await new Promise(resolve => setTimeout(resolve, 140));
+      drawPreview();
+      recorder.start(100);
+      state.lastFrameTime = performance.now();
+      state.playing = true;
+      syncAudioVideo();
+      const startedAt = performance.now();
+      const modeLabel = mode === 'video' ? 'video' : 'audio';
+      while (!state.exportStopRequested && state.currentTime < range.end) {
+        const progress = clamp((state.currentTime - range.start) / exportDuration, 0, 1);
+        updateExportProgress(progress, `Exporting ${modeLabel} in real time: ${Math.round(progress * 100)}% — keep this tab active.`);
+        setStatus(`Exporting ${modeLabel}: ${Math.round(progress * 100)}%... Keep this tab active.`);
+        await new Promise(resolve => setTimeout(resolve, 120));
+        if (performance.now() - startedAt > (exportDuration + 4) * 1000) break;
       }
       state.playing = false;
       syncAudioVideo();
-      recorder.stop();
+      if (recorder.state !== 'inactive') recorder.stop();
       await done;
-      const blob = new Blob(chunks, { type: mimeType });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'sanityvideo_export.webm';
-      a.click();
-      URL.revokeObjectURL(a.href);
-      setStatus('Exported WebM. Real-time preview recording completed.');
-    } catch (err) {
-      console.error(err);
-      alert('Export failed. Some browsers are stubborn little potatoes about WebM recording.');
-      setStatus('Export failed.');
+      if (!chunks.length) throw new Error('The browser completed recording without producing export data.');
+      const actualType = recorder.mimeType || mimeType;
+      let blob = new Blob(chunks, { type: actualType });
+      let extension = extensionForMime(requestedType || actualType || mimeType, mode);
+      if (mode === 'video' && requestedType === QUICKTIME_EXPORT_VALUE) {
+        updateExportProgress(0.99, 'Finalizing QuickTime MOV container…');
+        blob = await finalizeQuickTimeMov(blob, actualType || mimeType);
+        extension = 'mov';
+      } else if (mode === 'audio' && requestedType === M4A_EXPORT_VALUE) {
+        updateExportProgress(0.99, 'Finalizing M4A audio container…');
+        blob = await finalizeM4a(blob, actualType || mimeType);
+        extension = 'm4a';
+      }
+      triggerBlobDownload(blob, `${normalizeExportBaseName(els.exportFileName?.value)}.${extension}`);
+      const stopped = state.exportStopRequested;
+      updateExportProgress(1, stopped ? `Partial ${modeLabel} export saved.` : `${modeLabel[0].toUpperCase() + modeLabel.slice(1)} export complete.`);
+      setStatus(stopped ? `Partial ${modeLabel} export saved.` : `Exported ${extension.toUpperCase()} ${modeLabel}.`);
     } finally {
+      state.playing = false;
+      state.exportPlaybackEnd = null;
+      state.exportRenderScale = 1;
+      state.showPreviewTimeOverlay = previousOverlay;
       state.currentTime = previousTime;
       state.playing = previousPlaying;
-      syncAudioVideo();
-      els.exportBtn.disabled = false;
       state.exporting = false;
+      state.exportStopRequested = false;
+      for (const track of exportStream?.getTracks?.() || []) {
+        if (!state.audioDestination?.stream?.getTracks?.().includes(track)) {
+          try { track.stop(); } catch (err) {}
+        }
+      }
+      for (const track of canvasStream?.getTracks?.() || []) {
+        try { track.stop(); } catch (err) {}
+      }
+      if (els.canvas.width !== originalWidth || els.canvas.height !== originalHeight) {
+        els.canvas.width = originalWidth;
+        els.canvas.height = originalHeight;
+      }
+      syncAudioVideo();
       drawPreview();
       renderPlayhead();
+      updateViewportSideBanners();
+      setExportBusy(false);
     }
   }
+
+  async function startExportAs() {
+    if (state.exporting) return;
+    const mode = els.exportMode?.value || 'video';
+    const infrastructure = getExportInfrastructureStatus(mode);
+    if (!getSupportedExportFormats(mode).length || !infrastructure.ok) {
+      alert(infrastructure.detail || 'This browser does not support the selected export type.');
+      return;
+    }
+    try {
+      updateExportProgress(0, mode === 'frame' ? 'Encoding image…' : mode === 'gif' ? 'Preparing animated GIF…' : 'Preparing live export…');
+      if (mode === 'frame') {
+        setExportBusy(true);
+        await exportCurrentFrame();
+        setExportBusy(false);
+      } else if (mode === 'gif') {
+        await exportAnimatedGif();
+      } else if (mode === 'audio' && els.exportFormat?.value === 'audio/wav') {
+        await exportWavAudio();
+      } else {
+        await exportRecordedMedia(mode);
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || 'Export failed in this browser.');
+      setStatus('Export failed.');
+      setExportBusy(false);
+    }
+  }
+
 
   els.mediaInput.addEventListener('change', async (e) => {
     const files = [...e.target.files];
@@ -2889,6 +4141,12 @@
   els.toggleScrubDrawBtn.addEventListener('click', () => toggleScrubDrawMode());
   els.toggleScrubDrawBtn2.addEventListener('click', () => toggleScrubDrawMode());
   els.toggleSidebarBtn.addEventListener('click', () => {
+    if (isMobileLayout()) {
+      const opening = !els.app.classList.contains('mobile-sidebar-open');
+      if (opening) setMobileView('project');
+      else closeMobileSidebar();
+      return;
+    }
     state.sidebarVisible = !state.sidebarVisible;
     els.app.classList.toggle('sidebar-hidden', !state.sidebarVisible);
     requestAnimationFrame(updateViewportSideBanners);
@@ -2897,6 +4155,42 @@
     els.projectInstructionsSection.classList.toggle('collapsed');
     els.projectInstructionsToggle.textContent = els.projectInstructionsSection.classList.contains('collapsed') ? '▶' : '▼';
   });
+
+
+  if (els.mobileNav) {
+    els.mobileNav.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-mobile-view]');
+      if (!button) return;
+      setMobileView(button.dataset.mobileView);
+    });
+  }
+  if (els.mobileSettingsBtn) els.mobileSettingsBtn.addEventListener('click', () => openUiSettings(els.mobileSettingsBtn));
+  if (els.mobileSidebarBackdrop) els.mobileSidebarBackdrop.addEventListener('click', closeMobileSidebar);
+  if (els.mobileHeaderMenuBtn) els.mobileHeaderMenuBtn.addEventListener('click', () => els.toggleSidebarBtn?.click());
+  if (els.mobileProjectCloseBtn) els.mobileProjectCloseBtn.addEventListener('click', closeMobileSidebar);
+  if (els.mobileImportBtn) els.mobileImportBtn.addEventListener('click', () => els.mediaInput?.click());
+  if (els.mobilePlayPauseBtn) els.mobilePlayPauseBtn.addEventListener('click', togglePlayback);
+  if (els.mobileStopBtn) els.mobileStopBtn.addEventListener('click', stopPlayback);
+  if (els.mobileUndoBtn) els.mobileUndoBtn.addEventListener('click', undoHistory);
+  if (els.mobileExportBtn) els.mobileExportBtn.addEventListener('click', openExportDialog);
+  if (els.mobileAddLayerBtn) els.mobileAddLayerBtn.addEventListener('click', () => els.addLayerBtn?.click());
+  if (els.mobileDuplicateLayerBtn) els.mobileDuplicateLayerBtn.addEventListener('click', () => els.duplicateLayerBtn?.click());
+  if (els.mobileDeleteLayerBtn) els.mobileDeleteLayerBtn.addEventListener('click', () => els.deleteLayerBtn?.click());
+  if (els.mobileSplitBtn) els.mobileSplitBtn.addEventListener('click', splitSelectedClipsAtPlayhead);
+  if (els.mobileSnapBtn) els.mobileSnapBtn.addEventListener('click', () => els.toggleSnapBtn?.click());
+  if (els.mobileTimelineZoomOutBtn) els.mobileTimelineZoomOutBtn.addEventListener('click', () => setZoomAtClientX(state.pxPerSecond / 1.25, mobileTimelineAnchorX()));
+  if (els.mobileTimelineZoomInBtn) els.mobileTimelineZoomInBtn.addEventListener('click', () => setZoomAtClientX(state.pxPerSecond * 1.25, mobileTimelineAnchorX()));
+  if (els.mobileTimelineFitBtn) els.mobileTimelineFitBtn.addEventListener('click', fitTimelineView);
+  if (els.mobileMultiSelectBtn) els.mobileMultiSelectBtn.addEventListener('click', () => {
+    state.mobileMultiSelectMode = !state.mobileMultiSelectMode;
+    updateMobileMultiSelectButton();
+    setStatus(state.mobileMultiSelectMode ? 'Mobile multi-select enabled. Tap clips to add or remove them.' : 'Mobile multi-select disabled.');
+  });
+  if (els.mobileClipActionsBtn) els.mobileClipActionsBtn.addEventListener('click', () => {
+    openClipContextMenu(window.innerWidth / 2, Math.max(80, window.innerHeight - 220));
+  });
+  if (els.zoomOutBtn) els.zoomOutBtn.addEventListener('click', () => setZoomAtClientX(state.pxPerSecond / 1.25, mobileTimelineAnchorX()));
+  if (els.zoomInBtn) els.zoomInBtn.addEventListener('click', () => setZoomAtClientX(state.pxPerSecond * 1.25, mobileTimelineAnchorX()));
 
 
   async function startPlayback() {
@@ -2992,36 +4286,65 @@
     drawPreview();
     pushHistory('Toggle preview time overlay');
   });
-  els.exportBtn.addEventListener('click', exportVideo);
+  els.exportBtn.addEventListener('click', openExportDialog);
+  els.startExportBtn?.addEventListener('click', startExportAs);
+  els.closeExportBtn?.addEventListener('click', () => closeExportDialog());
+  els.cancelExportBtn?.addEventListener('click', () => closeExportDialog());
+  els.stopExportBtn?.addEventListener('click', () => { state.exportStopRequested = true; setStatus(state.gifEncodingActive ? 'Stopping GIF after the current frame…' : 'Stopping export after the current audio/video chunk…'); });
+  els.exportMode?.addEventListener('change', updateExportUi);
+  for (const button of els.exportModeShortcuts || []) {
+    button.addEventListener('click', () => {
+      if (!els.exportMode) return;
+      els.exportMode.value = button.dataset.exportModeShortcut || 'video';
+      updateExportUi();
+    });
+  }
+  els.exportFormat?.addEventListener('change', updateExportUi);
+  els.exportResolution?.addEventListener('change', updateExportUi);
+  els.exportGifResolution?.addEventListener('change', updateExportUi);
+  els.exportRange?.addEventListener('change', updateExportUi);
+  els.exportOverlay?.addEventListener('pointerdown', (event) => { if (event.target === els.exportOverlay && !state.exporting) closeExportDialog(); });
   if (els.previewFullscreenBtn) els.previewFullscreenBtn.addEventListener('click', togglePreviewFullscreen);
   if (els.previewShell) {
-    ['mousemove', 'mousedown', 'touchstart'].forEach(evt => {
+    ['pointermove', 'pointerdown'].forEach(evt => {
       els.previewShell.addEventListener(evt, () => pokeFullscreenControls(), { passive: true });
     });
   }
   if (els.closeStartupPanelBtn) els.closeStartupPanelBtn.addEventListener('click', closeStartupPanel);
+  if (els.uiSettingsBtn) els.uiSettingsBtn.addEventListener('click', () => {
+    if (els.uiSettingsOverlay?.hidden) openUiSettings(els.uiSettingsBtn);
+    else closeUiSettings();
+  });
+  if (els.closeUiSettingsBtn) els.closeUiSettingsBtn.addEventListener('click', closeUiSettings);
+  if (els.doneUiSettingsBtn) els.doneUiSettingsBtn.addEventListener('click', closeUiSettings);
+  if (els.resetUiScalingBtn) els.resetUiScalingBtn.addEventListener('click', resetUiScaling);
+  for (const input of els.uiScaleInputs || []) {
+    input.addEventListener('input', () => setUiScale(input.dataset.uiScale, input.value, false));
+    input.addEventListener('change', () => setUiScale(input.dataset.uiScale, input.value, true));
+  }
+  if (els.uiSettingsOverlay) els.uiSettingsOverlay.addEventListener('pointerdown', (e) => {
+    if (e.target === els.uiSettingsOverlay) closeUiSettings();
+  });
   document.addEventListener('fullscreenchange', () => { updatePreviewFullscreenButton(); if (isPreviewFullscreenActive()) pokeFullscreenControls(); else { clearFullscreenControlsHideTimer(); setFullscreenControlsVisible(false); } requestAnimationFrame(updateViewportSideBanners); });
   document.addEventListener('webkitfullscreenchange', () => { updatePreviewFullscreenButton(); if (isPreviewFullscreenActive()) pokeFullscreenControls(); else { clearFullscreenControlsHideTimer(); setFullscreenControlsVisible(false); } requestAnimationFrame(updateViewportSideBanners); });
   updatePreviewFullscreenButton();
   syncFullscreenControls();
 
   let scrubbing = false;
-  els.ruler.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return;
+  els.ruler.addEventListener('pointerdown', (e) => {
+    if (!isPrimaryPointer(e)) return;
+    if (e.cancelable) e.preventDefault();
     scrubbing = true;
     setCurrentTimeFromClientX(e.clientX);
-    const onMove = (ev) => { if (scrubbing) setCurrentTimeFromClientX(ev.clientX); };
-    const onUp = () => {
+    beginWindowPointerDrag(e, (ev) => {
+      if (scrubbing) setCurrentTimeFromClientX(ev.clientX);
+    }, () => {
       scrubbing = false;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    });
   });
 
-  els.timelineContent.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return;
+  els.timelineContent.addEventListener('pointerdown', (e) => {
+    if (!isPrimaryPointer(e)) return;
     if (e.target.closest('.clip')) return;
     if (e.target.closest('#ruler')) return;
     setCurrentTimeFromClientX(e.clientX);
@@ -3108,15 +4431,15 @@
   });
 
   let scrubPointerStart = null;
-  els.canvas.addEventListener('mousedown', (e) => {
-    if (!state.scrubDrawMode || e.button !== 0) return;
+  els.canvas.addEventListener('pointerdown', (e) => {
+    if (!state.scrubDrawMode || !isPrimaryPointer(e)) return;
     const info = getSelectedClipInfo();
     if (!info || (info.clip.kind !== 'image' && info.clip.kind !== 'video')) return;
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     scrubPointerStart = getCanvasNormalizedPos(e);
     state.scrubDraft = { x: scrubPointerStart.x, y: scrubPointerStart.y, w: 0.001, h: 0.001 };
     drawPreview();
-    const onMove = (ev) => {
+    beginWindowPointerDrag(e, (ev) => {
       const pos = getCanvasNormalizedPos(ev);
       state.scrubDraft = {
         x: Math.min(scrubPointerStart.x, pos.x),
@@ -3125,10 +4448,7 @@
         h: Math.max(0.005, Math.abs(pos.y - scrubPointerStart.y)),
       };
       drawPreview();
-    };
-    const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+    }, () => {
       const activeInfo = getSelectedClipInfo();
       if (activeInfo && state.scrubDraft) {
         activeInfo.clip.scrubRegions = cloneScrubRegions(activeInfo.clip.scrubRegions);
@@ -3143,9 +4463,7 @@
       drawPreview();
       pushHistory('Add scrub region');
       setStatus('Scrub region added.');
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    });
   });
 
   els.timelineScroll.addEventListener('wheel', (e) => {
@@ -3357,6 +4675,14 @@
     else if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')) { e.preventDefault(); redoHistory(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); splitSelectedClipsAtPlayhead(); }
     else if (!typingTarget && e.code === 'Space') { e.preventDefault(); await togglePlayback(); }
+    else if (e.key === 'Escape' && els.exportOverlay && !els.exportOverlay.hidden) {
+      e.preventDefault();
+      closeExportDialog();
+    }
+    else if (e.key === 'Escape' && els.uiSettingsOverlay && !els.uiSettingsOverlay.hidden) {
+      e.preventDefault();
+      closeUiSettings();
+    }
     else if (!typingTarget && e.key === 'Escape' && !isPreviewFullscreenActive()) {
       e.preventDefault();
       stopPlayback();
@@ -3364,14 +4690,28 @@
     }
   });
 
-  setStatus(`Ready. ${APP_BRAND} is armed. WebM export records the preview in real time.`);
+  loadUiScalePreferences();
+  applyUiScalePreferences({ persist: false, rerenderTimeline: false });
+  setStatus(`Ready. ${APP_BRAND} is armed. Export As supports browser-detected MOV, MP4, WebM, GIF, dedicated M4A, WAV, compressed audio, and still-image formats.`);
   createLayer('Layer 1');
   createLayer('Layer 2');
   createLayer('Layer 3');
   renderAll();
   pushHistory('Initial');
   updateUndoRedoButtons();
-  window.addEventListener('resize', updateViewportSideBanners);
+  updateMobileMultiSelectButton();
+  if (els.app) els.app.dataset.mobileView = 'preview';
+  if (isMobileLayout()) setMobileView('preview');
+  window.addEventListener('resize', () => {
+    applyUiScalePreferences({ persist: false });
+    updateViewportSideBanners();
+    if (!isMobileLayout()) {
+      els.app.classList.remove('mobile-sidebar-open');
+      els.app.removeAttribute('data-mobile-view');
+    } else if (!els.app.dataset.mobileView) {
+      setMobileView(state.mobileView || 'preview');
+    }
+  });
   if (window.ResizeObserver && els.previewShell) {
     const previewResizeObserver = new ResizeObserver(() => updateViewportSideBanners());
     previewResizeObserver.observe(els.previewShell);
