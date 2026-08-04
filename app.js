@@ -39,6 +39,7 @@
     mobileMultiSelectMode: false,
     mobileView: 'preview',
     mobileFullscreenFallback: false,
+    pendingImportLayerId: null,
     gifEncodingActive: false,
     uiScale: { topbar: 1, project: 1, clip: 1, preview: 1, inspector: 1, timeline: 1 },
   };
@@ -747,7 +748,13 @@
       state.selectedClipId = clipId;
       state.selectedClipIds = [clipId];
     }
-    if (layerId) state.selectedLayerId = layerId;
+    if (layerId && getLayerById(layerId)) {
+      state.selectedLayerId = layerId;
+      // Keep the hidden desktop upload selector synchronized with the layer
+      // selected from a clip tap. Mobile imports used to read the stale
+      // selector value and could therefore land on a different layer.
+      if (els.uploadLayer) els.uploadLayer.value = layerId;
+    }
     ensureSelectedClipState();
     renderSelection();
     renderTracks();
@@ -2534,8 +2541,16 @@
     drawPreview();
   }
 
+  function getActiveImportLayerId() {
+    if (state.selectedLayerId && getLayerById(state.selectedLayerId)) return state.selectedLayerId;
+    const selectedClipInfo = getSelectedClipInfo();
+    if (selectedClipInfo?.layer?.id) return selectedClipInfo.layer.id;
+    if (els.uploadLayer?.value && getLayerById(els.uploadLayer.value)) return els.uploadLayer.value;
+    return state.layers[0]?.id || null;
+  }
+
   function updateUploadLayerSelect() {
-    const current = state.selectedLayerId || els.uploadLayer.value;
+    const current = getActiveImportLayerId();
     els.uploadLayer.innerHTML = '';
     state.layers.forEach(layer => {
       const opt = document.createElement('option');
@@ -4175,9 +4190,19 @@
 
   els.mediaInput.addEventListener('change', async (e) => {
     const files = [...e.target.files];
-    if (!files.length) return;
+    if (!files.length) {
+      state.pendingImportLayerId = null;
+      return;
+    }
+    // Capture the mobile-selected target before decoding begins. The native
+    // file picker may blur/rebuild controls while it is open, so never let a
+    // stale hidden desktop selector override the layer the user tapped.
+    const targetLayerId = (state.pendingImportLayerId && getLayerById(state.pendingImportLayerId))
+      ? state.pendingImportLayerId
+      : getActiveImportLayerId();
+    state.pendingImportLayerId = null;
     try {
-      const result = await addMediaFiles(files, els.uploadLayer.value || state.selectedLayerId);
+      const result = await addMediaFiles(files, targetLayerId);
       if (result.added) pushHistory('Add media');
       const issues = result.skipped.length + result.failed.length;
       if (issues) {
@@ -4197,10 +4222,11 @@
     }
   });
 
+  if (els.uploadLayer) els.uploadLayer.addEventListener('change', () => selectLayer(els.uploadLayer.value));
   if (els.addLayerBtn) els.addLayerBtn.addEventListener('click', () => { createLayer('Layer ' + (state.layers.length + 1)); pushHistory('Add layer'); });
   if (els.duplicateLayerBtn) els.duplicateLayerBtn.addEventListener('click', async () => { await duplicateSelectedLayer(); pushHistory('Duplicate layer'); });
   if (els.deleteLayerBtn) els.deleteLayerBtn.addEventListener('click', () => { deleteSelectedLayer(); pushHistory('Delete layer'); });
-  els.addTextClipBtn.addEventListener('click', () => { createTextClip(els.uploadLayer.value || state.selectedLayerId); pushHistory('Add text clip'); });
+  els.addTextClipBtn.addEventListener('click', () => { createTextClip(getActiveImportLayerId()); pushHistory('Add text clip'); });
   els.addTransitionBtn.addEventListener('click', () => { createTransitionClip(); pushHistory('Add transition'); });
   els.toggleScrubDrawBtn.addEventListener('click', () => toggleScrubDrawMode());
   els.toggleScrubDrawBtn2.addEventListener('click', () => toggleScrubDrawMode());
@@ -4234,6 +4260,9 @@
   if (els.mobileProjectCloseBtn) els.mobileProjectCloseBtn.addEventListener('click', closeMobileSidebar);
   if (els.mobileImportBtn) els.mobileImportBtn.addEventListener('click', () => {
     if (!els.mediaInput) return;
+    // Lock the selected mobile layer to this import operation before opening
+    // the operating system's file picker.
+    state.pendingImportLayerId = getActiveImportLayerId();
     // Mobile file providers are inconsistent about mixed extension/MIME accept
     // lists. Use broad media wildcards for the mobile picker, while retaining
     // explicit common extensions so MP3/AAC/FLAC and files reported as
