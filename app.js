@@ -89,6 +89,7 @@
     mobileSidebarBackdrop: document.getElementById('mobileSidebarBackdrop'),
     mobileHeaderMenuBtn: document.getElementById('mobileHeaderMenuBtn'),
     mobileImportBtn: document.getElementById('mobileImportBtn'),
+    mobileMediaInput: document.getElementById('mobileMediaInput'),
     mobilePlayPauseBtn: document.getElementById('mobilePlayPauseBtn'),
     mobileStopBtn: document.getElementById('mobileStopBtn'),
     mobileUndoBtn: document.getElementById('mobileUndoBtn'),
@@ -740,14 +741,14 @@
     const currentType = String(file?.type || '').toLowerCase().split(';', 1)[0].trim();
     if (currentType === mimeType && !GENERIC_IMPORT_MIME_TYPES.has(currentType)) return { blob: file, mimeType };
     try {
-      const normalized = new File([file], file.name || ('import.' + fileExtension(file.name || 'bin')), {
-        type: mimeType,
-        lastModified: Number(file.lastModified) || Date.now(),
-      });
-      return { blob: normalized, mimeType };
-    } catch (err) {
-      return { blob: new Blob([file], { type: mimeType }), mimeType };
-    }
+      // Blob.slice() retags the MIME type without rebuilding the File. This is
+      // substantially more reliable for iPhone Files/iCloud provider handles,
+      // which can stop reading when wrapped inside a new File object.
+      if (typeof file?.slice === 'function') {
+        return { blob: file.slice(0, Number(file.size) || undefined, mimeType), mimeType };
+      }
+    } catch (err) {}
+    return { blob: new Blob([file], { type: mimeType }), mimeType };
   }
 
 
@@ -4262,20 +4263,28 @@
   }
 
 
-  els.mediaInput.addEventListener('change', async (e) => {
-    const files = [...e.target.files];
+  async function handleMediaInputSelection(input) {
+    if (!input || input.dataset.importBusy === '1') return;
+    const files = Array.from(input.files || []);
     if (!files.length) {
+      input._pendingImportLayerId = null;
       state.pendingImportLayerId = null;
       return;
     }
-    // Capture the mobile-selected target before decoding begins. The native
-    // file picker may blur/rebuild controls while it is open, so never let a
-    // stale hidden desktop selector override the layer the user tapped.
-    const targetLayerId = (state.pendingImportLayerId && getLayerById(state.pendingImportLayerId))
-      ? state.pendingImportLayerId
+
+    input.dataset.importBusy = '1';
+    const requestedLayerId = input._pendingImportLayerId || state.pendingImportLayerId;
+    const targetLayerId = (requestedLayerId && getLayerById(requestedLayerId))
+      ? requestedLayerId
       : getActiveImportLayerId();
+    input._pendingImportLayerId = null;
     state.pendingImportLayerId = null;
+
     try {
+      setStatus(`Importing ${files.length} file${files.length === 1 ? '' : 's'}…`);
+      // Give iOS a paint opportunity after the native picker closes so the UI
+      // visibly confirms that the Open action was received.
+      await new Promise(resolve => requestAnimationFrame(() => resolve()));
       const result = await addMediaFiles(files, targetLayerId);
       if (result.added) pushHistory('Add media');
       const issues = result.skipped.length + result.failed.length;
@@ -4292,9 +4301,24 @@
       console.error(err);
       setStatus('Media load failed.');
     } finally {
-      e.target.value = '';
+      // Clearing permits selecting the exact same iPhone file again.
+      input.value = '';
+      delete input.dataset.importBusy;
     }
-  });
+  }
+
+  function bindMediaInput(input) {
+    if (!input) return;
+    input.addEventListener('change', () => handleMediaInputSelection(input));
+    input.addEventListener('cancel', () => {
+      input._pendingImportLayerId = null;
+      state.pendingImportLayerId = null;
+      setStatus('Import cancelled.');
+    });
+  }
+
+  bindMediaInput(els.mediaInput);
+  bindMediaInput(els.mobileMediaInput);
 
   if (els.uploadLayer) els.uploadLayer.addEventListener('change', () => selectLayer(els.uploadLayer.value));
   if (els.addLayerBtn) els.addLayerBtn.addEventListener('click', () => {
@@ -4336,26 +4360,22 @@
   if (els.mobileSidebarBackdrop) els.mobileSidebarBackdrop.addEventListener('click', closeMobileSidebar);
   if (els.mobileHeaderMenuBtn) els.mobileHeaderMenuBtn.addEventListener('click', () => els.toggleSidebarBtn?.click());
   if (els.mobileProjectCloseBtn) els.mobileProjectCloseBtn.addEventListener('click', closeMobileSidebar);
-  if (els.mobileImportBtn) els.mobileImportBtn.addEventListener('click', () => {
-    if (!els.mediaInput) return;
-    // Lock the selected mobile layer to this import operation before opening
-    // the operating system's file picker.
-    state.pendingImportLayerId = getActiveImportLayerId();
-    // Mobile file providers are inconsistent about mixed extension/MIME accept
-    // lists. Use broad media wildcards for the mobile picker, while retaining
-    // explicit common extensions so MP3/AAC/FLAC and files reported as
-    // application/octet-stream remain selectable.
-    els.mediaInput.setAttribute('accept', [
-      'audio/*', 'video/*', 'image/*', 'text/plain',
-      '.mp3', '.mp2', '.mpga', '.m4a', '.aac', '.adts', '.wav', '.wave',
-      '.ogg', '.oga', '.opus', '.weba', '.flac', '.aif', '.aiff', '.aifc',
-      '.caf', '.amr', '.3ga', '.mp4', '.mov', '.m4v', '.webm', '.ogv',
-      '.mpeg', '.mpg', '.3gp', '.3g2', '.avi', '.mkv', '.mts', '.m2ts',
-      '.gif', '.png', '.jpg', '.jpeg', '.jfif', '.webp', '.bmp', '.svg',
-      '.avif', '.heic', '.heif', '.txt'
-    ].join(','));
-    els.mediaInput.click();
-  });
+  if (els.mobileMediaInput) {
+    const prepareNativeMobileImport = () => {
+      const targetLayerId = getActiveImportLayerId();
+      state.pendingImportLayerId = targetLayerId;
+      els.mobileMediaInput._pendingImportLayerId = targetLayerId;
+      // Reset before opening so choosing the same file still fires change.
+      if (els.mobileMediaInput.dataset.importBusy !== '1') els.mobileMediaInput.value = '';
+      setStatus('Choose media to import into the selected layer…');
+    };
+    // pointerdown is used when available; touchstart keeps older iPhones safe.
+    els.mobileMediaInput.addEventListener('pointerdown', prepareNativeMobileImport, { passive: true });
+    els.mobileMediaInput.addEventListener('touchstart', prepareNativeMobileImport, { passive: true });
+    els.mobileMediaInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') prepareNativeMobileImport();
+    });
+  }
   if (els.mobilePlayPauseBtn) els.mobilePlayPauseBtn.addEventListener('click', togglePlayback);
   if (els.mobileStopBtn) els.mobileStopBtn.addEventListener('click', stopPlayback);
   if (els.mobileUndoBtn) els.mobileUndoBtn.addEventListener('click', undoHistory);

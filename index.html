@@ -1269,12 +1269,40 @@
     }
     .mobile-header-time { white-space:nowrap; font-variant-numeric:tabular-nums; color:#f3f3f5; font-size:11px; }
     .mobile-header-actions { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; }
-    .mobile-header-actions button {
+    .mobile-header-actions button,
+    .mobile-header-actions .mobile-import-control {
       min-width:0; min-height:46px; padding:5px 3px; border-radius:11px;
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; font-size:10px;
     }
-    .mobile-header-actions button span:first-child { font-size:17px; line-height:1; }
+    .mobile-header-actions button span:first-child,
+    .mobile-header-actions .mobile-import-control > span:first-child { font-size:17px; line-height:1; }
     .mobile-header-actions button:disabled { opacity:.42; }
+    .mobile-import-control {
+      position:relative;
+      overflow:hidden;
+      margin:0;
+      box-sizing:border-box;
+      cursor:pointer;
+      -webkit-user-select:none;
+      user-select:none;
+    }
+    /* iPhone Safari can ignore a programmatic click on a file input whose
+       desktop toolbar ancestor is hidden. This transparent native input sits
+       directly over the visible Import control, so the tap reaches the real
+       file input and the Files app's Open action always has a live target. */
+    .mobile-import-native-input {
+      position:absolute;
+      inset:0;
+      z-index:4;
+      width:100%;
+      height:100%;
+      margin:0;
+      padding:0;
+      border:0;
+      opacity:0;
+      cursor:pointer;
+      font-size:100px;
+    }
 
     .mobile-project-header {
       position:sticky; top:0; z-index:4; display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -1357,7 +1385,7 @@
     .mobile-header-time { grid-column:2; font-size:10px; margin-top:-5px; }
     .mobile-header-brand img { width:min(43vw, 150px); }
     .mobile-header-brand span { display:none; }
-    .mobile-header-actions button { min-height:44px; font-size:9px; }
+    .mobile-header-actions button, .mobile-header-actions .mobile-import-control { min-height:44px; font-size:9px; }
     .mobile-nav button { font-size:10px; }
     :root { --timeline-list-w:min(39vw, 145px); }
   }
@@ -1367,8 +1395,8 @@
     .mobile-header-primary { grid-template-columns:40px minmax(0,1fr) auto; }
     .mobile-header-icon { width:40px; min-width:40px; height:38px; }
     .mobile-header-brand img { width:min(22vw, 130px); }
-    .mobile-header-actions button { min-height:38px; flex-direction:row; gap:4px; font-size:9px; }
-    .mobile-header-actions button span:first-child { font-size:14px; }
+    .mobile-header-actions button, .mobile-header-actions .mobile-import-control { min-height:38px; flex-direction:row; gap:4px; font-size:9px; }
+    .mobile-header-actions button span:first-child, .mobile-header-actions .mobile-import-control > span:first-child { font-size:14px; }
     .mobile-header-time { grid-column:auto; margin:0; }
     .mobile-timeline-tools { padding-top:4px; padding-bottom:4px; }
     .mobile-timeline-tools button { min-height:36px; }
@@ -1388,7 +1416,10 @@
       <span id="mobileHeaderTime" class="mobile-header-time">00:00.0 / 00:30.0</span>
     </div>
     <div class="mobile-header-actions" role="toolbar" aria-label="Quick editor actions">
-      <button id="mobileImportBtn" type="button"><span aria-hidden="true">＋</span><span>Import</span></button>
+      <label id="mobileImportBtn" class="button-like primary mobile-import-control" aria-label="Import media to selected layer">
+        <span aria-hidden="true">＋</span><span>Import</span>
+        <input id="mobileMediaInput" class="mobile-import-native-input" type="file" accept="audio/*,video/*,image/*,text/plain,.mp3,.mp2,.mpga,.m4a,.aac,.adts,.wav,.wave,.ogg,.oga,.opus,.weba,.flac,.aif,.aiff,.aifc,.caf,.amr,.3ga,.mp4,.mov,.m4v,.webm,.ogv,.mpeg,.mpg,.3gp,.3g2,.avi,.mkv,.mts,.m2ts,.gif,.png,.jpg,.jpeg,.jfif,.webp,.bmp,.svg,.avif,.heic,.heif,.txt" multiple />
+      </label>
       <button id="mobilePlayPauseBtn" class="primary" type="button" aria-pressed="false"><span aria-hidden="true">▶</span><span>Play</span></button>
       <button id="mobileStopBtn" type="button"><span aria-hidden="true">■</span><span>Stop</span></button>
       <button id="mobileUndoBtn" type="button"><span aria-hidden="true">↶</span><span>Undo</span></button>
