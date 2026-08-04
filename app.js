@@ -45,6 +45,7 @@
     pendingImportLayerId: null,
     gifEncodingActive: false,
     uiScale: { topbar: 1, project: 1, clip: 1, preview: 1, inspector: 1, timeline: 1 },
+    donationReturnFocus: null,
   };
 
   const els = {
@@ -173,6 +174,13 @@
     projectInstructionsSection: document.getElementById('projectInstructionsSection'),
     projectInstructionsHeader: document.getElementById('projectInstructionsHeader'),
     projectInstructionsToggle: document.getElementById('projectInstructionsToggle'),
+    helpDonateBtn: document.getElementById('helpDonateBtn'),
+    donationOverlay: document.getElementById('donationOverlay'),
+    donationTitle: document.getElementById('donationTitle'),
+    closeDonationBtn: document.getElementById('closeDonationBtn'),
+    donationOkayBtn: document.getElementById('donationOkayBtn'),
+    donationDisclaimerStep: document.getElementById('donationDisclaimerStep'),
+    donationLinksStep: document.getElementById('donationLinksStep'),
     startupOverlay: document.getElementById('startupOverlay'),
     startupCompatGrid: document.getElementById('startupCompatGrid'),
     closeStartupPanelBtn: document.getElementById('closeStartupPanelBtn'),
@@ -488,6 +496,37 @@
     for (const key of UI_SCALE_KEYS) state.uiScale[key] = 1;
     applyUiScalePreferences({ persist: true });
     setStatus('All workspace windows reset to 100% scale.');
+  }
+
+  function focusWithoutScroll(element) {
+    if (!element || typeof element.focus !== 'function') return;
+    try { element.focus({ preventScroll: true }); } catch (err) { element.focus(); }
+  }
+
+  function openDonation() {
+    if (!els.donationOverlay) return;
+    state.donationReturnFocus = document.activeElement;
+    if (els.donationTitle) els.donationTitle.textContent = 'Donation disclaimer';
+    if (els.donationDisclaimerStep) els.donationDisclaimerStep.hidden = false;
+    if (els.donationLinksStep) els.donationLinksStep.hidden = true;
+    els.donationOverlay.hidden = false;
+    requestAnimationFrame(() => focusWithoutScroll(els.closeDonationBtn));
+  }
+
+  function showDonationLinks() {
+    if (els.donationTitle) els.donationTitle.textContent = 'Donate to CRUXTAIN';
+    if (els.donationDisclaimerStep) els.donationDisclaimerStep.hidden = true;
+    if (els.donationLinksStep) els.donationLinksStep.hidden = false;
+    const firstLink = els.donationLinksStep?.querySelector('a');
+    requestAnimationFrame(() => focusWithoutScroll(firstLink));
+  }
+
+  function closeDonation() {
+    if (!els.donationOverlay || els.donationOverlay.hidden) return;
+    els.donationOverlay.hidden = true;
+    const returnFocus = state.donationReturnFocus;
+    state.donationReturnFocus = null;
+    requestAnimationFrame(() => focusWithoutScroll(returnFocus || els.helpDonateBtn));
   }
 
 
@@ -4947,6 +4986,12 @@
   if (els.uiSettingsOverlay) els.uiSettingsOverlay.addEventListener('pointerdown', (e) => {
     if (e.target === els.uiSettingsOverlay) closeUiSettings();
   });
+  if (els.helpDonateBtn) els.helpDonateBtn.addEventListener('click', openDonation);
+  if (els.closeDonationBtn) els.closeDonationBtn.addEventListener('click', closeDonation);
+  if (els.donationOkayBtn) els.donationOkayBtn.addEventListener('click', showDonationLinks);
+  if (els.donationOverlay) els.donationOverlay.addEventListener('pointerdown', (e) => {
+    if (e.target === els.donationOverlay) closeDonation();
+  });
   document.addEventListener('fullscreenchange', () => { updatePreviewFullscreenButton(); if (isPreviewFullscreenActive()) pokeFullscreenControls(); else { clearFullscreenControlsHideTimer(); setFullscreenControlsVisible(false); } requestAnimationFrame(updateViewportSideBanners); });
   document.addEventListener('webkitfullscreenchange', () => { updatePreviewFullscreenButton(); if (isPreviewFullscreenActive()) pokeFullscreenControls(); else { clearFullscreenControlsHideTimer(); setFullscreenControlsVisible(false); } requestAnimationFrame(updateViewportSideBanners); });
   updatePreviewFullscreenButton();
@@ -5308,6 +5353,10 @@
     else if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')) { e.preventDefault(); redoHistory(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); splitSelectedClipsAtPlayhead(); }
     else if (!typingTarget && e.code === 'Space') { e.preventDefault(); await togglePlayback(); }
+    else if (e.key === 'Escape' && els.donationOverlay && !els.donationOverlay.hidden) {
+      e.preventDefault();
+      closeDonation();
+    }
     else if (e.key === 'Escape' && els.exportOverlay && !els.exportOverlay.hidden) {
       e.preventDefault();
       closeExportDialog();

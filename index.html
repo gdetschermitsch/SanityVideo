@@ -894,6 +894,188 @@
   .install-ios-steps[hidden] { display:none; }
 
 
+
+  /* Help-section CRUXTAIN support controls */
+  .help-support-panel {
+    margin-top: 16px;
+    padding: 14px;
+    border-radius: 13px;
+    border: 1px solid rgba(255,255,255,0.13);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018)),
+      linear-gradient(180deg, #171719 0%, #0b0b0d 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 8px 20px rgba(0,0,0,0.25);
+  }
+  .help-support-label {
+    margin: 0 0 5px;
+    color: var(--accent-2);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .help-support-copy {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .help-support-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-top: 12px;
+  }
+  .help-support-button {
+    min-height: 44px;
+    padding: 10px 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.17);
+    color: var(--text);
+    font-weight: 800;
+    letter-spacing: 0.025em;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  }
+  .help-support-button:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+    box-shadow: 0 7px 16px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  .help-support-button:active { transform: translateY(1px) scale(0.985); }
+  .help-support-button:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+  }
+  .help-cruxtain-button {
+    background: linear-gradient(180deg, #d7d7da 0%, #77777c 48%, #343438 100%);
+    color: #09090a;
+    border-color: rgba(255,255,255,0.38);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.42);
+  }
+  button.help-donate-button {
+    background: linear-gradient(180deg, #85474b 0%, #5d3034 48%, #32191c 100%);
+    color: #fff4f4;
+    border-color: rgba(235,153,160,0.38);
+  }
+  button.help-donate-button:hover {
+    background: linear-gradient(180deg, #9a5358 0%, #6d383c 48%, #3d1e22 100%);
+  }
+
+  .donation-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 14000;
+    display: grid;
+    place-items: center;
+    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+  }
+  .donation-overlay[hidden] { display: none; }
+  .donation-panel {
+    width: min(560px, 100%);
+    max-height: calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow: auto;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background:
+      linear-gradient(145deg, rgba(255,255,255,0.055), transparent 44%),
+      linear-gradient(180deg, rgba(29,29,32,0.995), rgba(8,8,10,0.995));
+    box-shadow: 0 28px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.09);
+  }
+  .donation-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .donation-heading h2 {
+    margin: 3px 0 0;
+    color: var(--accent-2);
+    font-size: 22px;
+  }
+  .donation-eyebrow {
+    margin: 0;
+    color: #dc8d93;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .donation-close {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 24px;
+    line-height: 1;
+  }
+  .donation-step { margin-top: 17px; }
+  .donation-step[hidden] { display: none; }
+  .donation-copy {
+    margin: 0;
+    color: #dedee1;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .donation-step-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+  .donation-step-actions button { min-width: 120px; }
+  .donation-link-grid {
+    display: grid;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .donation-link {
+    min-height: 46px;
+    padding: 11px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.13);
+    background: linear-gradient(180deg, #2c2c30 0%, #17171a 100%);
+    color: var(--text);
+    font-weight: 800;
+    text-align: center;
+    text-decoration: none;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
+    transition: transform 0.12s ease, filter 0.12s ease, border-color 0.12s ease;
+  }
+  .donation-link:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.13);
+    border-color: rgba(255,255,255,0.3);
+  }
+  .donation-link:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+  }
+  .donation-link-primary {
+    background: linear-gradient(180deg, #8b4b50 0%, #5e3034 55%, #351a1d 100%);
+    border-color: rgba(235,153,160,0.38);
+    color: #fff7f7;
+  }
+
+  @media (max-width: 520px) {
+    .help-support-actions { grid-template-columns: 1fr; }
+    .donation-panel { padding: 15px; border-radius: 15px; }
+    .donation-heading h2 { font-size: 19px; }
+    .donation-step-actions button,
+    .donation-link { width: 100%; min-height: 48px; }
+  }
+
   /* Export As */
   .export-overlay {
     position: fixed;
@@ -1601,6 +1783,14 @@
 		  <div>Shift + right-click on empty timeline area → Opens the clip context menu without clearing the current selection</div>
 		  <div>Right-click on empty timeline area without Shift → Clears selection, then opens the clip context menu</div>
         </div>
+        <div class="help-support-panel" aria-label="CRUXTAIN website and donation support">
+          <p class="help-support-label">CRUXTAIN™</p>
+          <p class="help-support-copy">Visit the CRUXTAIN hub or support continued development of SanityVideo and other CRUXTAIN projects.</p>
+          <div class="help-support-actions">
+            <a id="helpCruxtainBtn" class="help-support-button help-cruxtain-button" href="https://gdetschermitsch.github.io/CRUXTAIN/index.html" target="_blank" rel="noopener noreferrer" aria-label="Visit the CRUXTAIN website">CRUXTAIN</a>
+            <button id="helpDonateBtn" class="help-support-button help-donate-button" type="button" aria-haspopup="dialog" aria-controls="donationOverlay">Donate</button>
+          </div>
+        </div>
       </div>
     </div>
   </aside>
@@ -2201,6 +2391,34 @@ software or marks without permission is prohibited. You may use and study it fre
       <button id="closeStartupPanelBtn" class="primary" type="button">Enter SanityVideo © 2026</button>
     </div>
   </div>
+</div>
+
+<div id="donationOverlay" class="donation-overlay" hidden>
+  <section class="donation-panel" role="dialog" aria-modal="true" aria-labelledby="donationTitle" aria-describedby="donationDisclaimer">
+    <div class="donation-heading">
+      <div>
+        <p class="donation-eyebrow">Support CRUXTAIN™</p>
+        <h2 id="donationTitle">Donation disclaimer</h2>
+      </div>
+      <button id="closeDonationBtn" class="donation-close" type="button" aria-label="Close donation window">×</button>
+    </div>
+
+    <div id="donationDisclaimerStep" class="donation-step">
+      <p id="donationDisclaimer" class="donation-copy">CRUXTAIN donations are used to support all CRUXTAIN projects, including the music studio, authorship, game development, web tools, products, and other projects. Donations are not tax deductible.</p>
+      <div class="donation-step-actions">
+        <button id="donationOkayBtn" class="primary" type="button">Okay</button>
+      </div>
+    </div>
+
+    <div id="donationLinksStep" class="donation-step" hidden>
+      <p class="donation-copy">Your support helps fund CRUXTAIN projects and continued development.</p>
+      <div class="donation-link-grid">
+        <a class="donation-link donation-link-primary" href="https://www.paypal.com/paypalme/CRUXTAIN" target="_blank" rel="noopener noreferrer">Donate with PayPal</a>
+        <a class="donation-link" href="https://venmo.com/u/Gage-Detschermitsch" target="_blank" rel="noopener noreferrer">Donate with Venmo</a>
+        <a class="donation-link" href="https://gdetschermitsch.github.io/CRUXTAIN/index.html" target="_blank" rel="noopener noreferrer">Visit CRUXTAIN</a>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script src="app.js" defer></script>
