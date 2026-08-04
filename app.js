@@ -408,14 +408,14 @@
 
     const timelineListWidth = mobile
       ? clamp(Math.min(window.innerWidth * 0.44, 170) * timeline, 92, window.innerWidth * 0.58)
-      : clamp(250 * timeline, 150, Math.max(150, window.innerWidth * 0.34));
+      : clamp(290 * timeline, 270, Math.max(270, window.innerWidth * 0.40));
 
     root.style.setProperty('--sidebar-w', `${Math.round(sidebarWidth)}px`);
     root.style.setProperty('--clip-panel-w', `${Math.round(clipWidth)}px`);
     root.style.setProperty('--inspector-panel-w', `${Math.round(inspectorWidth)}px`);
     root.style.setProperty('--timeline-list-w', `${Math.round(timelineListWidth)}px`);
     root.style.setProperty('--track-h', `${Math.round((mobile ? 88 : 68) * timeline)}px`);
-    root.style.setProperty('--ruler-h', `${Math.round(mobile ? Math.max(52, 48 * timeline) : 26 * timeline)}px`);
+    root.style.setProperty('--ruler-h', `${Math.round(mobile ? Math.max(52, 48 * timeline) : Math.max(46, 38 * timeline))}px`);
 
     const baseTimelineHeight = clamp(window.innerHeight * 0.34, 260, window.innerHeight * 0.42);
     const timelineHeight = clamp(baseTimelineHeight * timeline, 210, window.innerHeight * 0.7);

@@ -452,19 +452,29 @@
     z-index: 2;
   }
   .timeline-layer-toolbar {
-    display: flex; align-items: center; justify-content: flex-start; gap: 6px;
-    padding: 3px 8px;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: calc(4px * var(--timeline-ui-scale));
+    padding: calc(4px * var(--timeline-ui-scale)) calc(6px * var(--timeline-ui-scale));
     height: var(--ruler-h);
     min-height: var(--ruler-h);
-    overflow-y: hidden;
+    min-width: 0;
+    overflow: hidden;
     border-bottom: 1px solid rgba(255,255,255,0.06);
     background: linear-gradient(180deg, #121214 0%, #0b0b0c 100%);
     position: sticky; top: 0; z-index: 3;
   }
   .timeline-layer-toolbar button {
-    padding: calc(4px * var(--timeline-ui-scale)) calc(8px * var(--timeline-ui-scale));
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    padding: calc(3px * var(--timeline-ui-scale)) calc(5px * var(--timeline-ui-scale));
     font-size: calc(11px * var(--timeline-ui-scale));
-    line-height: 1.1;
+    line-height: 1.08;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
   }
   .selected-clip-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin: 0 0 10px 0; }
   .track-row {
