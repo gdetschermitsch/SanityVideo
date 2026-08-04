@@ -683,9 +683,9 @@
   function escapeHtml(str) {
     return String(str).replace(/[&<>\"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
   }
-  const IMPORT_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm']);
-  const IMPORT_AUDIO_EXTENSIONS = new Set(['m4a', 'wav', 'wave', 'ogg', 'oga', 'opus', 'weba']);
-  const IMPORT_IMAGE_EXTENSIONS = new Set(['gif', 'png', 'jpg', 'jpeg', 'webp']);
+  const IMPORT_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'ogv', 'mpeg', 'mpg', '3gp', '3g2', 'avi', 'mkv', 'mts', 'm2ts']);
+  const IMPORT_AUDIO_EXTENSIONS = new Set(['mp3', 'mp2', 'mpga', 'mpeg3', 'm4a', 'aac', 'adts', 'wav', 'wave', 'ogg', 'oga', 'opus', 'weba', 'flac', 'aif', 'aiff', 'aifc', 'caf', 'amr', '3ga']);
+  const IMPORT_IMAGE_EXTENSIONS = new Set(['gif', 'png', 'jpg', 'jpeg', 'jfif', 'webp', 'bmp', 'svg', 'avif', 'heic', 'heif']);
   const IMPORT_TEXT_EXTENSIONS = new Set(['txt']);
 
   function fileExtension(fileName = '') {
@@ -4232,7 +4232,23 @@
   if (els.mobileSidebarBackdrop) els.mobileSidebarBackdrop.addEventListener('click', closeMobileSidebar);
   if (els.mobileHeaderMenuBtn) els.mobileHeaderMenuBtn.addEventListener('click', () => els.toggleSidebarBtn?.click());
   if (els.mobileProjectCloseBtn) els.mobileProjectCloseBtn.addEventListener('click', closeMobileSidebar);
-  if (els.mobileImportBtn) els.mobileImportBtn.addEventListener('click', () => els.mediaInput?.click());
+  if (els.mobileImportBtn) els.mobileImportBtn.addEventListener('click', () => {
+    if (!els.mediaInput) return;
+    // Mobile file providers are inconsistent about mixed extension/MIME accept
+    // lists. Use broad media wildcards for the mobile picker, while retaining
+    // explicit common extensions so MP3/AAC/FLAC and files reported as
+    // application/octet-stream remain selectable.
+    els.mediaInput.setAttribute('accept', [
+      'audio/*', 'video/*', 'image/*', 'text/plain',
+      '.mp3', '.mp2', '.mpga', '.m4a', '.aac', '.adts', '.wav', '.wave',
+      '.ogg', '.oga', '.opus', '.weba', '.flac', '.aif', '.aiff', '.aifc',
+      '.caf', '.amr', '.3ga', '.mp4', '.mov', '.m4v', '.webm', '.ogv',
+      '.mpeg', '.mpg', '.3gp', '.3g2', '.avi', '.mkv', '.mts', '.m2ts',
+      '.gif', '.png', '.jpg', '.jpeg', '.jfif', '.webp', '.bmp', '.svg',
+      '.avif', '.heic', '.heif', '.txt'
+    ].join(','));
+    els.mediaInput.click();
+  });
   if (els.mobilePlayPauseBtn) els.mobilePlayPauseBtn.addEventListener('click', togglePlayback);
   if (els.mobileStopBtn) els.mobileStopBtn.addEventListener('click', stopPlayback);
   if (els.mobileUndoBtn) els.mobileUndoBtn.addEventListener('click', undoHistory);
