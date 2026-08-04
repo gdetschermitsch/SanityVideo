@@ -688,6 +688,19 @@
   const IMPORT_AUDIO_EXTENSIONS = new Set(['mp3', 'mp2', 'mpga', 'mpeg3', 'm4a', 'aac', 'adts', 'wav', 'wave', 'ogg', 'oga', 'opus', 'weba', 'flac', 'aif', 'aiff', 'aifc', 'caf', 'amr', '3ga']);
   const IMPORT_IMAGE_EXTENSIONS = new Set(['gif', 'png', 'jpg', 'jpeg', 'jfif', 'webp', 'bmp', 'svg', 'avif', 'heic', 'heif']);
   const IMPORT_TEXT_EXTENSIONS = new Set(['txt']);
+  const IMPORT_MIME_BY_EXTENSION = Object.freeze({
+    mp3: 'audio/mpeg', mp2: 'audio/mpeg', mpga: 'audio/mpeg', mpeg3: 'audio/mpeg',
+    m4a: 'audio/mp4', aac: 'audio/aac', adts: 'audio/aac', wav: 'audio/wav', wave: 'audio/wav',
+    ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', weba: 'audio/webm', flac: 'audio/flac',
+    aif: 'audio/aiff', aiff: 'audio/aiff', aifc: 'audio/aiff', caf: 'audio/x-caf', amr: 'audio/amr', '3ga': 'audio/3gpp',
+    mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/x-m4v', webm: 'video/webm', ogv: 'video/ogg',
+    mpeg: 'video/mpeg', mpg: 'video/mpeg', '3gp': 'video/3gpp', '3g2': 'video/3gpp2', avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska', mts: 'video/mp2t', m2ts: 'video/mp2t',
+    gif: 'image/gif', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg',
+    webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif',
+    txt: 'text/plain'
+  });
+  const GENERIC_IMPORT_MIME_TYPES = new Set(['', 'application/octet-stream', 'binary/octet-stream', 'application/unknown', 'application/x-download']);
 
   function fileExtension(fileName = '') {
     const safeName = String(fileName || '').toLowerCase().split(/[?#]/, 1)[0];
@@ -698,19 +711,43 @@
   function mediaKindFromType(type, fileName = '') {
     const safeType = String(type || '').toLowerCase().split(';', 1)[0].trim();
     const extension = fileExtension(fileName);
-    if (safeType.startsWith('video/')) return 'video';
     if (safeType.startsWith('audio/')) return 'audio';
+    if (safeType.startsWith('video/')) return 'video';
     if (safeType.startsWith('image/')) return 'image';
     if (safeType.startsWith('text/')) return 'text';
 
-    // Mobile file providers frequently return an empty MIME type or
-    // application/octet-stream. Fall back to the filename so every format
-    // SanityVideo can export can also be selected again for import.
+    // Mobile document providers often return no MIME type, a generic binary
+    // MIME type, or a provider-specific value. The file extension is therefore
+    // the authoritative fallback for import classification.
     if (IMPORT_AUDIO_EXTENSIONS.has(extension)) return 'audio';
     if (IMPORT_IMAGE_EXTENSIONS.has(extension)) return 'image';
     if (IMPORT_TEXT_EXTENSIONS.has(extension)) return 'text';
     if (IMPORT_VIDEO_EXTENSIONS.has(extension)) return 'video';
     return null;
+  }
+
+  function inferredImportMime(file, kind) {
+    const declared = String(file?.type || '').toLowerCase().split(';', 1)[0].trim();
+    const extension = fileExtension(file?.name || '');
+    const inferred = IMPORT_MIME_BY_EXTENSION[extension] || '';
+    const declaredMatchesKind = declared && declared.startsWith(kind + '/');
+    if (!GENERIC_IMPORT_MIME_TYPES.has(declared) && declaredMatchesKind) return declared;
+    return inferred || (declaredMatchesKind ? declared : '') || ({ audio: 'audio/mpeg', video: 'video/mp4', image: 'image/png', text: 'text/plain' }[kind] || 'application/octet-stream');
+  }
+
+  function normalizeImportFile(file, kind) {
+    const mimeType = inferredImportMime(file, kind);
+    const currentType = String(file?.type || '').toLowerCase().split(';', 1)[0].trim();
+    if (currentType === mimeType && !GENERIC_IMPORT_MIME_TYPES.has(currentType)) return { blob: file, mimeType };
+    try {
+      const normalized = new File([file], file.name || ('import.' + fileExtension(file.name || 'bin')), {
+        type: mimeType,
+        lastModified: Number(file.lastModified) || Date.now(),
+      });
+      return { blob: normalized, mimeType };
+    } catch (err) {
+      return { blob: new Blob([file], { type: mimeType }), mimeType };
+    }
   }
 
 
@@ -2694,36 +2731,57 @@
     setStatus('Transition clip added.');
   }
 
-  function createMediaElement(kind, url) {
+  function createMediaElement(kind, url, mimeType = '') {
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        fn(value);
+      };
+      const timeoutId = setTimeout(() => finish(reject, new Error('Timed out while reading media metadata.')), 20000);
       if (kind === 'image') {
         const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
+        img.onload = () => finish(resolve, img);
+        img.onerror = () => finish(reject, new Error('This image format could not be decoded by the browser.'));
         img.src = url;
-      } else if (kind === 'video') {
-        const video = document.createElement('video');
-        video.preload = 'auto';
-        video.crossOrigin = 'anonymous';
-        video.playsInline = true;
-        video.muted = false;
-        video.defaultMuted = false;
-        video.src = url;
-        const refreshPausedPreview = () => {
-          if (!state.playing) queuePausedPreviewRefresh();
-        };
-        video.addEventListener('loadedmetadata', () => resolve(video), { once: true });
-        video.addEventListener('loadeddata', refreshPausedPreview);
-        video.addEventListener('seeked', refreshPausedPreview);
-        video.addEventListener('error', reject, { once: true });
-      } else if (kind === 'audio') {
-        const audio = document.createElement('audio');
-        audio.preload = 'auto';
-        audio.src = url;
-        audio.addEventListener('loadedmetadata', () => resolve(audio), { once: true });
-        audio.addEventListener('error', reject, { once: true });
+      } else if (kind === 'video' || kind === 'audio') {
+        const media = document.createElement(kind);
+        media.preload = 'metadata';
+        media.playsInline = true;
+        if (kind === 'video') {
+          media.crossOrigin = 'anonymous';
+          media.muted = false;
+          media.defaultMuted = false;
+          const refreshPausedPreview = () => {
+            if (!state.playing) queuePausedPreviewRefresh();
+          };
+          media.addEventListener('loadeddata', refreshPausedPreview);
+          media.addEventListener('seeked', refreshPausedPreview);
+        }
+        media.addEventListener('loadedmetadata', () => finish(resolve, media), { once: true });
+        media.addEventListener('durationchange', () => {
+          if (media.readyState >= 1) finish(resolve, media);
+        }, { once: true });
+        media.addEventListener('error', () => {
+          const detail = media.error?.message || `This ${kind} format could not be decoded by the browser.`;
+          finish(reject, new Error(detail));
+        }, { once: true });
+        if (mimeType) media.dataset.importMime = mimeType;
+        media.src = url;
+        // Explicit load() is important on iOS and Android document providers,
+        // where assigning a blob URL alone does not always begin metadata load.
+        try { media.load(); } catch (err) {}
+      } else {
+        finish(reject, new Error('Unsupported media kind.'));
       }
     });
+  }
+
+  function getUsableMediaDuration(media, fallback = 5) {
+    const duration = Number(media?.duration);
+    return Number.isFinite(duration) && duration > 0 ? duration : fallback;
   }
 
   async function addMediaFiles(files, targetLayerId) {
@@ -2745,24 +2803,40 @@
         if (kind === 'text') {
           clip = await createTextClipFromFile(file, layer, start);
         } else {
-          objectUrl = URL.createObjectURL(file);
-          const media = await createMediaElement(kind, objectUrl);
+          const normalized = normalizeImportFile(file, kind);
+          objectUrl = URL.createObjectURL(normalized.blob);
+          let media = await createMediaElement(kind, objectUrl, normalized.mimeType);
 
-          // Audio-only WebM files can arrive from mobile storage without a
-          // MIME type. A video element still reads their metadata, so convert
-          // them to a proper audio timeline clip when no video track exists.
+          // Audio-only WebM files can arrive from mobile storage as video/webm.
+          // Rebuild them as a true audio element when no video dimensions exist.
           if (kind === 'video' && fileExtension(file.name) === 'webm' && media instanceof HTMLVideoElement && !media.videoWidth && !media.videoHeight) {
             kind = 'audio';
+            media.pause();
+            media.removeAttribute('src');
+            try { media.load(); } catch (err) {}
+            media = await createMediaElement('audio', objectUrl, 'audio/webm');
           }
 
           if (media instanceof HTMLMediaElement) await ensureAudioGraphFor(media);
-          const mediaDuration = (kind === 'video' || kind === 'audio') ? (media.duration || 1) : DEFAULT_IMAGE_DURATION;
+          const mediaDuration = (kind === 'video' || kind === 'audio') ? getUsableMediaDuration(media, 5) : DEFAULT_IMAGE_DURATION;
           clip = buildBaseClip(kind, file.name, start, kind === 'image' ? DEFAULT_IMAGE_DURATION : Math.max(0.3, mediaDuration), mediaDuration);
           clip.element = media;
           clip.src = objectUrl;
-          clip.sourceFile = file;
-          clip.mimeType = file.type || '';
+          clip.sourceFile = normalized.blob;
+          clip.mimeType = normalized.mimeType;
           clip.fileName = file.name;
+          if (media instanceof HTMLMediaElement) {
+            media.addEventListener('durationchange', () => {
+              const nextDuration = getUsableMediaDuration(media, clip.mediaDuration || clip.duration || 5);
+              if (!Number.isFinite(nextDuration) || nextDuration <= 0) return;
+              const oldMediaDuration = Number(clip.mediaDuration) || 0;
+              clip.mediaDuration = roundToTenth(nextDuration);
+              if (!oldMediaDuration || Math.abs((Number(clip.duration) || 0) - oldMediaDuration) < 0.15) {
+                clip.duration = roundToTenth(Math.max(0.3, nextDuration));
+              }
+              renderAll();
+            });
+          }
         }
         layer.clips.push(clip);
         state.selectedLayerId = layer.id;
@@ -4223,7 +4297,11 @@
   });
 
   if (els.uploadLayer) els.uploadLayer.addEventListener('change', () => selectLayer(els.uploadLayer.value));
-  if (els.addLayerBtn) els.addLayerBtn.addEventListener('click', () => { createLayer('Layer ' + (state.layers.length + 1)); pushHistory('Add layer'); });
+  if (els.addLayerBtn) els.addLayerBtn.addEventListener('click', () => {
+    const layer = createLayer('Layer ' + (state.layers.length + 1));
+    selectLayer(layer.id);
+    pushHistory('Add layer');
+  });
   if (els.duplicateLayerBtn) els.duplicateLayerBtn.addEventListener('click', async () => { await duplicateSelectedLayer(); pushHistory('Duplicate layer'); });
   if (els.deleteLayerBtn) els.deleteLayerBtn.addEventListener('click', () => { deleteSelectedLayer(); pushHistory('Delete layer'); });
   els.addTextClipBtn.addEventListener('click', () => { createTextClip(getActiveImportLayerId()); pushHistory('Add text clip'); });
@@ -4457,18 +4535,27 @@
     });
   });
 
-  // Empty track space is selection-only. Timeline seeking is intentionally
-  // restricted to the ruler above so taps in the track lanes cannot move
-  // the playhead, especially in the mobile timeline view.
+  // Empty track space selects its layer but never seeks. Timeline seeking is
+  // intentionally restricted to the ruler above, especially on mobile.
   els.timelineContent.addEventListener('pointerdown', (e) => {
     if (!isPrimaryPointer(e)) return;
     if (e.target.closest('.clip')) return;
     if (e.target.closest('#ruler')) return;
+    const tracksRect = els.tracksArea?.getBoundingClientRect();
+    if (tracksRect && e.clientY >= tracksRect.top && e.clientY <= tracksRect.bottom) {
+      const layerIndex = clamp(Math.floor((e.clientY - tracksRect.top) / getTrackHeight()), 0, Math.max(0, state.layers.length - 1));
+      const layer = state.layers[layerIndex];
+      if (layer) {
+        state.selectedLayerId = layer.id;
+        if (els.uploadLayer) els.uploadLayer.value = layer.id;
+      }
+    }
     if (!e.shiftKey) {
       state.selectedClipId = null;
       state.selectedClipIds = [];
       renderSelection();
       renderTracks();
+      updateUploadLayerSelect();
     }
   });
 
