@@ -683,13 +683,32 @@
   function escapeHtml(str) {
     return String(str).replace(/[&<>\"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
   }
+  const IMPORT_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm']);
+  const IMPORT_AUDIO_EXTENSIONS = new Set(['m4a', 'wav', 'wave', 'ogg', 'oga', 'opus', 'weba']);
+  const IMPORT_IMAGE_EXTENSIONS = new Set(['gif', 'png', 'jpg', 'jpeg', 'webp']);
+  const IMPORT_TEXT_EXTENSIONS = new Set(['txt']);
+
+  function fileExtension(fileName = '') {
+    const safeName = String(fileName || '').toLowerCase().split(/[?#]/, 1)[0];
+    const dot = safeName.lastIndexOf('.');
+    return dot >= 0 ? safeName.slice(dot + 1) : '';
+  }
+
   function mediaKindFromType(type, fileName = '') {
-    const safeType = String(type || '').toLowerCase();
-    const safeName = String(fileName || '').toLowerCase();
+    const safeType = String(type || '').toLowerCase().split(';', 1)[0].trim();
+    const extension = fileExtension(fileName);
     if (safeType.startsWith('video/')) return 'video';
     if (safeType.startsWith('audio/')) return 'audio';
     if (safeType.startsWith('image/')) return 'image';
-    if (safeType.startsWith('text/') || safeName.endsWith('.txt')) return 'text';
+    if (safeType.startsWith('text/')) return 'text';
+
+    // Mobile file providers frequently return an empty MIME type or
+    // application/octet-stream. Fall back to the filename so every format
+    // SanityVideo can export can also be selected again for import.
+    if (IMPORT_AUDIO_EXTENSIONS.has(extension)) return 'audio';
+    if (IMPORT_IMAGE_EXTENSIONS.has(extension)) return 'image';
+    if (IMPORT_TEXT_EXTENSIONS.has(extension)) return 'text';
+    if (IMPORT_VIDEO_EXTENSIONS.has(extension)) return 'video';
     return null;
   }
 
@@ -2694,34 +2713,56 @@
 
   async function addMediaFiles(files, targetLayerId) {
     const layer = getLayerById(targetLayerId) || state.layers[0];
-    if (!layer) return;
+    const result = { added: 0, skipped: [], failed: [] };
+    if (!layer) return result;
     let timelineOffset = 0;
     for (const file of files) {
-      const kind = mediaKindFromType(file.type || '', file.name || '');
-      if (!kind) continue;
-      const start = getImportStartTime(layer, timelineOffset);
-      let clip = null;
-      if (kind === 'text') {
-        clip = await createTextClipFromFile(file, layer, start);
-      } else {
-        const url = URL.createObjectURL(file);
-        const media = await createMediaElement(kind, url);
-        if (media instanceof HTMLMediaElement) await ensureAudioGraphFor(media);
-        const mediaDuration = (kind === 'video' || kind === 'audio') ? (media.duration || 1) : DEFAULT_IMAGE_DURATION;
-        clip = buildBaseClip(kind, file.name, start, kind === 'image' ? DEFAULT_IMAGE_DURATION : Math.max(0.3, mediaDuration), mediaDuration);
-        clip.element = media;
-        clip.src = url;
-        clip.sourceFile = file;
-        clip.mimeType = file.type || '';
-        clip.fileName = file.name;
+      const declaredKind = mediaKindFromType(file.type || '', file.name || '');
+      if (!declaredKind) {
+        result.skipped.push(file.name || 'Unnamed file');
+        continue;
       }
-      layer.clips.push(clip);
-      state.selectedLayerId = layer.id;
-      state.selectedClipId = clip.id;
-      state.selectedClipIds = [clip.id];
-      timelineOffset = roundToTenth((clip.start + clip.duration + 0.2) - state.currentTime);
+      const start = getImportStartTime(layer, timelineOffset);
+      let objectUrl = '';
+      try {
+        let kind = declaredKind;
+        let clip = null;
+        if (kind === 'text') {
+          clip = await createTextClipFromFile(file, layer, start);
+        } else {
+          objectUrl = URL.createObjectURL(file);
+          const media = await createMediaElement(kind, objectUrl);
+
+          // Audio-only WebM files can arrive from mobile storage without a
+          // MIME type. A video element still reads their metadata, so convert
+          // them to a proper audio timeline clip when no video track exists.
+          if (kind === 'video' && fileExtension(file.name) === 'webm' && media instanceof HTMLVideoElement && !media.videoWidth && !media.videoHeight) {
+            kind = 'audio';
+          }
+
+          if (media instanceof HTMLMediaElement) await ensureAudioGraphFor(media);
+          const mediaDuration = (kind === 'video' || kind === 'audio') ? (media.duration || 1) : DEFAULT_IMAGE_DURATION;
+          clip = buildBaseClip(kind, file.name, start, kind === 'image' ? DEFAULT_IMAGE_DURATION : Math.max(0.3, mediaDuration), mediaDuration);
+          clip.element = media;
+          clip.src = objectUrl;
+          clip.sourceFile = file;
+          clip.mimeType = file.type || '';
+          clip.fileName = file.name;
+        }
+        layer.clips.push(clip);
+        state.selectedLayerId = layer.id;
+        state.selectedClipId = clip.id;
+        state.selectedClipIds = [clip.id];
+        timelineOffset = roundToTenth((clip.start + clip.duration + 0.2) - state.currentTime);
+        result.added += 1;
+      } catch (err) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        console.error(`Failed to import ${file.name || 'file'}`, err);
+        result.failed.push(file.name || 'Unnamed file');
+      }
     }
-    renderAll();
+    if (result.added) renderAll();
+    return result;
   }
 
   async function duplicateClip(clip, options = {}) {
@@ -4136,9 +4177,17 @@
     const files = [...e.target.files];
     if (!files.length) return;
     try {
-      await addMediaFiles(files, els.uploadLayer.value || state.selectedLayerId);
-      pushHistory('Add media');
-      setStatus(`${files.length} file${files.length === 1 ? '' : 's'} added.`);
+      const result = await addMediaFiles(files, els.uploadLayer.value || state.selectedLayerId);
+      if (result.added) pushHistory('Add media');
+      const issues = result.skipped.length + result.failed.length;
+      if (issues) {
+        const details = [
+          result.skipped.length ? `${result.skipped.length} unsupported` : '',
+          result.failed.length ? `${result.failed.length} could not be decoded by this browser` : '',
+        ].filter(Boolean).join(', ');
+        alert(`${result.added} file${result.added === 1 ? '' : 's'} imported; ${details}.`);
+      }
+      setStatus(`${result.added} file${result.added === 1 ? '' : 's'} imported${issues ? `; ${issues} not added` : ''}.`);
     } catch (err) {
       alert('Failed to load one or more files. Browser media decoding can be a fussy little beast.');
       console.error(err);

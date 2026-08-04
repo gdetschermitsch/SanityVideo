@@ -747,18 +747,18 @@
   /* Independent workspace scaling */
   .ui-settings-button {
     position: fixed;
-    top: max(10px, env(safe-area-inset-top));
-    right: max(10px, env(safe-area-inset-right));
+    top: max(13px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
     z-index: 12000;
-    width: 46px;
-    height: 46px;
-    min-width: 46px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
     padding: 0;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 23px;
+    font-size: 18px;
     line-height: 1;
     background: linear-gradient(180deg, #e4e4e7 0%, #8d8d93 100%);
     color: #101012;
@@ -1151,11 +1151,12 @@
 
 
     .ui-settings-button {
-      top: max(8px, env(safe-area-inset-top));
-      right: max(8px, env(safe-area-inset-right));
-      width: 44px;
-      height: 44px;
-      min-width: 44px;
+      top: max(11px, env(safe-area-inset-top));
+      right: max(12px, env(safe-area-inset-right));
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      font-size: 18px;
     }
     .ui-settings-overlay {
       place-items: end center;
@@ -1401,7 +1402,7 @@
       <div class="topbar-title-wrap"><img class="topbar-title-image" src="SanityVideoTitle.png" alt="SanityVideo © 2026" title="SanityVideo © 2026" /><span class="brand-mark" aria-label="SanityVideo copyright 2026">© 2026</span></div>
       <label class="small">Upload to layer</label>
       <select id="uploadLayer"></select>
-      <input id="mediaInput" class="visually-hidden-file-input" type="file" accept="video/*,image/*,audio/*,.txt,text/plain" multiple />
+      <input id="mediaInput" class="visually-hidden-file-input" type="file" accept=".mp4,.mov,.m4v,.webm,.m4a,.wav,.wave,.ogg,.oga,.opus,.gif,.png,.jpg,.jpeg,.webp,.txt,video/mp4,video/quicktime,video/webm,audio/mp4,audio/x-m4a,audio/m4a,audio/wav,audio/x-wav,audio/webm,audio/ogg,image/gif,image/png,image/jpeg,image/webp,text/plain,video/*,audio/*,image/*" multiple />
       <label for="mediaInput" id="chooseFilesBtn" class="button-like primary file-trigger">Choose Files</label>
     </div>
     <div class="group">
